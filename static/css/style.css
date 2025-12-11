@@ -1,0 +1,502 @@
+/* Global Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: #000000;
+    color: #ff9000;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    padding: 20px;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Row Layout */
+.row {
+    display: grid;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.input-row,
+.combobox-row,
+.component-row,
+.slider-row {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.output-row {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+/* Viewport Styles */
+.viewport-container {
+    display: flex;
+    flex-direction: column;
+}
+
+.viewport {
+    border: 2px solid #ff9000;
+    background-color: #000000;
+    aspect-ratio: 16 / 9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.3s;
+    max-height: 180px;
+}
+
+.viewport:hover {
+    border-color: #ffb84d;
+}
+
+.viewport img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.viewport .placeholder {
+    color: #ff9000;
+    opacity: 0.5;
+    font-size: 0.9rem;
+    text-align: center;
+    padding: 10px;
+}
+
+.file-input {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.component-viewport {
+    cursor: default;
+}
+
+.output-viewport {
+    aspect-ratio: 16 / 9;
+    cursor: pointer;
+    max-height: 280px;
+}
+
+.output-container {
+    width: 100%;
+}
+
+/* Combobox Styles */
+.combobox-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.component-select {
+    width: 100%;
+    padding: 10px;
+    background-color: #000000;
+    color: #ff9000;
+    border: 2px solid #ff9000;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.component-select:hover,
+.component-select:focus {
+    border-color: #ffb84d;
+}
+
+.component-select option {
+    background-color: #000000;
+    color: #ff9000;
+}
+
+/* Slider Styles */
+.slider-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.slider-container label {
+    color: #ff9000;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.weight-slider {
+    width: 100%;
+    height: 8px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #ff9000;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+}
+
+.weight-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #ff9000;
+    border: 2px solid #000000;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.weight-slider::-webkit-slider-thumb:hover {
+    background: #ffb84d;
+}
+
+.weight-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #ff9000;
+    border: 2px solid #000000;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.weight-slider::-moz-range-thumb:hover {
+    background: #ffb84d;
+}
+
+/* Output Selection */
+.output-container.selected .viewport {
+    border-width: 4px;
+    border-color: #ffb84d;
+    box-shadow: 0 0 20px rgba(255, 144, 0, 0.5);
+}
+
+/* Viewport Interactions */
+.viewport.dragging {
+    cursor: move;
+    border-color: #ffb84d;
+}
+
+/* Status Indicator */
+.status-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 24px;
+    background-color: rgba(0, 0, 0, 0.9);
+    border: 2px solid #ff9000;
+    border-radius: 4px;
+    color: #ff9000;
+    font-size: 0.9rem;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.status-indicator.visible {
+    opacity: 1;
+}
+
+.status-indicator.loading {
+    border-color: #ff9000;
+    animation: pulse 1.5s infinite;
+}
+
+.status-indicator.done {
+    border-color: #00ff90;
+    color: #00ff90;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* Frequency Filter Controls */
+.filter-row {
+    grid-template-columns: 1fr;
+    background-color: rgba(255, 144, 0, 0.1);
+    padding: 15px;
+    border: 2px solid #ff9000;
+    border-radius: 4px;
+    margin-bottom: 25px;
+}
+
+.filter-controls {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+
+.filter-label {
+    color: #ff9000;
+    font-size: 0.95rem;
+    font-weight: bold;
+    text-align: center;
+}
+
+.filter-toggle {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.filter-toggle input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #ff9000;
+}
+
+.filter-toggle label {
+    color: #ff9000;
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.filter-toggle input[type="radio"]:checked + label {
+    color: #ffb84d;
+    font-weight: bold;
+}
+
+.filter-instructions {
+    color: #ff9000;
+    font-size: 0.85rem;
+    font-style: italic;
+    text-align: center;
+    opacity: 0.8;
+}
+
+.filter-button {
+    padding: 10px 20px;
+    background-color: #000000;
+    color: #ff9000;
+    border: 2px solid #ff9000;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.filter-button:hover {
+    background-color: #ff9000;
+    color: #000000;
+}
+
+/* Filter Overlay on Component Viewports */
+.filter-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Interactive Filter Rectangle */
+.filter-rectangle {
+    position: absolute;
+    border: 3px solid #00ff90;
+    background-color: rgba(0, 255, 144, 0.1);
+    box-shadow: 
+        0 0 10px rgba(0, 255, 144, 0.5),
+        inset 0 0 20px rgba(0, 255, 144, 0.1);
+    cursor: move;
+    pointer-events: auto;
+    min-width: 20px;
+    min-height: 20px;
+    box-sizing: border-box;
+    transition: box-shadow 0.2s;
+    display: none; /* Hidden by default until image loads */
+}
+
+.filter-rectangle:hover {
+    box-shadow: 
+        0 0 15px rgba(0, 255, 144, 0.7),
+        inset 0 0 30px rgba(0, 255, 144, 0.15);
+    border-color: #00ffaa;
+}
+
+.filter-rectangle.dragging {
+    box-shadow: 
+        0 0 20px rgba(0, 255, 144, 0.9),
+        inset 0 0 40px rgba(0, 255, 144, 0.2);
+    border-color: #00ffcc;
+}
+
+/* Outer mode - rejected inner region */
+.filter-overlay.outer-mode .filter-rectangle {
+    border-color: #ff0000;
+    background-color: rgba(255, 0, 0, 0.1);
+    box-shadow: 
+        0 0 10px rgba(255, 0, 0, 0.5),
+        inset 0 0 20px rgba(255, 0, 0, 0.1);
+}
+
+.filter-overlay.outer-mode .filter-rectangle:hover {
+    box-shadow: 
+        0 0 15px rgba(255, 0, 0, 0.7),
+        inset 0 0 30px rgba(255, 0, 0, 0.15);
+    border-color: #ff3333;
+}
+
+.filter-overlay.outer-mode .filter-rectangle.dragging {
+    box-shadow: 
+        0 0 20px rgba(255, 0, 0, 0.9),
+        inset 0 0 40px rgba(255, 0, 0, 0.2);
+    border-color: #ff6666;
+}
+
+/* Resize Handles */
+.resize-handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background-color: #00ff90;
+    border: 2px solid #000000;
+    border-radius: 50%;
+    z-index: 11;
+    pointer-events: auto;
+    box-shadow: 0 0 5px rgba(0, 255, 144, 0.8);
+    transition: all 0.2s;
+}
+
+.resize-handle:hover {
+    width: 16px;
+    height: 16px;
+    background-color: #00ffaa;
+    box-shadow: 0 0 10px rgba(0, 255, 144, 1);
+}
+
+.filter-overlay.outer-mode .resize-handle {
+    background-color: #ff0000;
+    box-shadow: 0 0 5px rgba(255, 0, 0, 0.8);
+}
+
+.filter-overlay.outer-mode .resize-handle:hover {
+    background-color: #ff3333;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 1);
+}
+
+/* Handle Positions */
+.resize-handle.nw {
+    top: -6px;
+    left: -6px;
+    cursor: nw-resize;
+}
+
+.resize-handle.ne {
+    top: -6px;
+    right: -6px;
+    cursor: ne-resize;
+}
+
+.resize-handle.sw {
+    bottom: -6px;
+    left: -6px;
+    cursor: sw-resize;
+}
+
+.resize-handle.se {
+    bottom: -6px;
+    right: -6px;
+    cursor: se-resize;
+}
+
+/* Rejected Region Overlay */
+.filter-overlay.inner-mode::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: 
+        linear-gradient(45deg, transparent 48%, rgba(255, 0, 0, 0.2) 48%, rgba(255, 0, 0, 0.2) 52%, transparent 52%),
+        linear-gradient(-45deg, transparent 48%, rgba(255, 0, 0, 0.2) 48%, rgba(255, 0, 0, 0.2) 52%, transparent 52%);
+    background-size: 8px 8px;
+    background-color: rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+    z-index: 9;
+}
+
+.filter-overlay.outer-mode::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9;
+}
+
+/* Punch hole for inner mode (keep inner) */
+.filter-overlay.inner-mode .filter-rectangle {
+    /* Rectangle itself represents kept area - no additional overlay on it */
+    z-index: 10;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .input-row,
+    .combobox-row,
+    .component-row,
+    .slider-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .filter-controls {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .filter-slider {
+        width: 100%;
+        max-width: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .input-row,
+    .combobox-row,
+    .component-row,
+    .slider-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .output-row {
+        grid-template-columns: 1fr;
+    }
+}

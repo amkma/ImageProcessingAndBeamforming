@@ -36,22 +36,7 @@
             </div>
         </div>
 
-        <!-- Row 2: Mixing Mode Selector -->
-        <div class="row filter-row">
-            <div class="filter-controls">
-                <div class="filter-group">
-                    <label class="filter-label">Mixing Mode:</label>
-                    <div class="filter-toggle">
-                        <input type="radio" id="mode-mag-phase" name="mixing-mode" value="magnitude_phase" checked>
-                        <label for="mode-mag-phase">Magnitude & Phase</label>
-                        <input type="radio" id="mode-real-imag" name="mixing-mode" value="real_imaginary">
-                        <label for="mode-real-imag">Real & Imaginary</label>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Row 3: Component Selection Comboboxes -->
+        <!-- Row 2: Component Selection Comboboxes -->
         <div class="row combobox-row">
             <div class="combobox-container">
                 <select id="component-select-1" class="component-select">
@@ -146,19 +131,35 @@
         <!-- Row 4: Component A Weights -->
         <div class="row slider-row">
             <div class="slider-container">
-                <label for="weight-a-1"><span id="label-a">Magnitude</span>: <span id="weight-a-value-1">0</span>%</label>
+                <select id="mode-select-1" class="mode-select">
+                    <option value="magnitude_phase">Mag & Phase</option>
+                    <option value="real_imaginary">Real & Imag</option>
+                </select>
+                <label for="weight-a-1"><span id="label-a-1">Magnitude</span>: <span id="weight-a-value-1">0</span>%</label>
                 <input type="range" id="weight-a-1" class="weight-slider" min="0" max="100" value="0">
             </div>
             <div class="slider-container">
-                <label for="weight-a-2"><span id="label-a">Magnitude</span>: <span id="weight-a-value-2">0</span>%</label>
+                <select id="mode-select-2" class="mode-select">
+                    <option value="magnitude_phase">Mag & Phase</option>
+                    <option value="real_imaginary">Real & Imag</option>
+                </select>
+                <label for="weight-a-2"><span id="label-a-2">Magnitude</span>: <span id="weight-a-value-2">0</span>%</label>
                 <input type="range" id="weight-a-2" class="weight-slider" min="0" max="100" value="0">
             </div>
             <div class="slider-container">
-                <label for="weight-a-3"><span id="label-a">Magnitude</span>: <span id="weight-a-value-3">0</span>%</label>
+                <select id="mode-select-3" class="mode-select">
+                    <option value="magnitude_phase">Mag & Phase</option>
+                    <option value="real_imaginary">Real & Imag</option>
+                </select>
+                <label for="weight-a-3"><span id="label-a-3">Magnitude</span>: <span id="weight-a-value-3">0</span>%</label>
                 <input type="range" id="weight-a-3" class="weight-slider" min="0" max="100" value="0">
             </div>
             <div class="slider-container">
-                <label for="weight-a-4"><span id="label-a">Magnitude</span>: <span id="weight-a-value-4">0</span>%</label>
+                <select id="mode-select-4" class="mode-select">
+                    <option value="magnitude_phase">Mag & Phase</option>
+                    <option value="real_imaginary">Real & Imag</option>
+                </select>
+                <label for="weight-a-4"><span id="label-a-4">Magnitude</span>: <span id="weight-a-value-4">0</span>%</label>
                 <input type="range" id="weight-a-4" class="weight-slider" min="0" max="100" value="0">
             </div>
         </div>
@@ -166,19 +167,19 @@
         <!-- Row 5: Component B Weights -->
         <div class="row slider-row">
             <div class="slider-container">
-                <label for="weight-b-1"><span id="label-b">Phase</span>: <span id="weight-b-value-1">0</span>%</label>
+                <label for="weight-b-1"><span id="label-b-1">Phase</span>: <span id="weight-b-value-1">0</span>%</label>
                 <input type="range" id="weight-b-1" class="weight-slider" min="0" max="100" value="0">
             </div>
             <div class="slider-container">
-                <label for="weight-b-2"><span id="label-b">Phase</span>: <span id="weight-b-value-2">0</span>%</label>
+                <label for="weight-b-2"><span id="label-b-2">Phase</span>: <span id="weight-b-value-2">0</span>%</label>
                 <input type="range" id="weight-b-2" class="weight-slider" min="0" max="100" value="0">
             </div>
             <div class="slider-container">
-                <label for="weight-b-3"><span id="label-b">Phase</span>: <span id="weight-b-value-3">0</span>%</label>
+                <label for="weight-b-3"><span id="label-b-3">Phase</span>: <span id="weight-b-value-3">0</span>%</label>
                 <input type="range" id="weight-b-3" class="weight-slider" min="0" max="100" value="0">
             </div>
             <div class="slider-container">
-                <label for="weight-b-4"><span id="label-b">Phase</span>: <span id="weight-b-value-4">0</span>%</label>
+                <label for="weight-b-4"><span id="label-b-4">Phase</span>: <span id="weight-b-value-4">0</span>%</label>
                 <input type="range" id="weight-b-4" class="weight-slider" min="0" max="100" value="0">
             </div>
         </div>

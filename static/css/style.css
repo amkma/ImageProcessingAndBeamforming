@@ -141,6 +141,27 @@ body {
     gap: 8px;
 }
 
+.slider-container .mode-select {
+    background-color: #000000;
+    color: #ff9000;
+    border: 2px solid #ff9000;
+    padding: 5px;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    cursor: pointer;
+    outline: none;
+    text-align: center;
+}
+
+.slider-container .mode-select:hover {
+    border-color: #ffb84d;
+}
+
+.slider-container .mode-select option {
+    background-color: #000000;
+    color: #ff9000;
+}
+
 .slider-container label {
     color: #ff9000;
     font-size: 0.9rem;

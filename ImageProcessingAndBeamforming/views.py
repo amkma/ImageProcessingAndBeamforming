@@ -143,7 +143,7 @@ def mix_images(request):
     """
     Mix images using dual-component weighting.
     POST params:
-        - mode: 'magnitude_phase' or 'real_imaginary'
+        - modes: dict {image_key: mode} where mode is 'magnitude_phase' or 'real_imaginary'
         - weights_a: dict {image_key: weight} for component A
         - weights_b: dict {image_key: weight} for component B
         - filter: dict with 'mode' and 'rect' [optional]
@@ -153,7 +153,7 @@ def mix_images(request):
     
     try:
         data = json.loads(request.body)
-        mode = data.get('mode', 'magnitude_phase')
+        modes = data.get('modes', {})
         weights_a = data.get('weights_a', {})
         weights_b = data.get('weights_b', {})
         filter_params = data.get('filter', None)
@@ -162,7 +162,7 @@ def mix_images(request):
             return JsonResponse({'error': 'No weights provided'}, status=400)
         
         # Perform mixing
-        output_image = viewer.mix_images(mode, weights_a, weights_b, filter_params)
+        output_image = viewer.mix_images(modes, weights_a, weights_b, filter_params)
         img_base64 = viewer.image_to_base64(output_image)
         
         return JsonResponse({

@@ -161,14 +161,13 @@ class ImageViewer:
         fft_cache = self._get_fft(image_key)
         return fft_cache['imaginary']
     
-    def mix_images(self, mode, weights_a, weights_b, filter_params=None):
+    def mix_images(self, modes, weights_a, weights_b, filter_params=None):
         """
-        Mix FFTs using dual-component weighting:
-        - Mode 'magnitude_phase': Mix magnitudes and phases separately
-        - Mode 'real_imaginary': Mix real and imaginary parts separately
+        Mix FFTs using dual-component weighting with per-image mode selection.
+        Each image can use either magnitude_phase or real_imaginary mode independently.
         
         Args:
-            mode: 'magnitude_phase' or 'real_imaginary'
+            modes: dict {image_key: mode} where mode is 'magnitude_phase' or 'real_imaginary'
             weights_a: dict {image_key: weight} for component A (magnitude or real)
             weights_b: dict {image_key: weight} for component B (phase or imaginary)
             filter_params: dict with 'mode' ('inner'/'outer') and 'rect'
@@ -190,52 +189,53 @@ class ImageViewer:
                 filter_params.get('rect')
             )
         
-        # Initialize accumulators
-        mixed_comp_a = np.zeros(ref_shape, dtype=np.float64)
-        mixed_comp_b = np.zeros(ref_shape, dtype=np.float64)
+        # Initialize accumulator for complex FFT
+        mixed_fft = np.zeros(ref_shape, dtype=np.complex128)
         
-        if mode == 'magnitude_phase':
-            # Mix magnitudes
-            for image_key, weight in weights_a.items():
-                if image_key in self.images:
-                    component = self._get_fft(image_key)['magnitude'] * weight
-                    if frequency_mask is not None:
-                        component = component * frequency_mask
-                    mixed_comp_a += component
+        # Process each image according to its mode
+        for image_key in self.images.keys():
+            mode = modes.get(image_key, 'magnitude_phase')
+            weight_a = weights_a.get(image_key, 0)
+            weight_b = weights_b.get(image_key, 0)
             
-            # Mix phases
-            for image_key, weight in weights_b.items():
-                if image_key in self.images:
-                    component = self._get_fft(image_key)['phase'] * weight
-                    if frequency_mask is not None:
-                        component = component * frequency_mask
-                    mixed_comp_b += component
+            # Skip if no weights for this image
+            if weight_a == 0 and weight_b == 0:
+                continue
             
-            # Reconstruct: Mag * exp(j*Phase)
-            aggregate_matrix = mixed_comp_a * np.exp(1j * mixed_comp_b)
+            fft_cache = self._get_fft(image_key)
+            
+            if mode == 'magnitude_phase':
+                # Get magnitude and phase for this image
+                magnitude = fft_cache['magnitude'] * weight_a
+                phase = fft_cache['phase'] * weight_b
+                
+                if frequency_mask is not None:
+                    magnitude = magnitude * frequency_mask
+                    phase = phase * frequency_mask
+                
+                # Reconstruct complex FFT: Mag * exp(j*Phase)
+                image_fft = magnitude * np.exp(1j * phase)
+                
+            elif mode == 'real_imaginary':
+                # Get real and imaginary parts for this image
+                real_part = fft_cache['real'] * weight_a
+                imag_part = fft_cache['imaginary'] * weight_b
+                
+                if frequency_mask is not None:
+                    real_part = real_part * frequency_mask
+                    imag_part = imag_part * frequency_mask
+                
+                # Reconstruct complex FFT: Real + j*Imag
+                image_fft = real_part + 1j * imag_part
+                
+            else:
+                raise ValueError(f"Invalid mode for {image_key}: {mode}")
+            
+            # Add to accumulated FFT
+            mixed_fft += image_fft
         
-        elif mode == 'real_imaginary':
-            # Mix real parts
-            for image_key, weight in weights_a.items():
-                if image_key in self.images:
-                    component = self._get_fft(image_key)['real'] * weight
-                    if frequency_mask is not None:
-                        component = component * frequency_mask
-                    mixed_comp_a += component
-            
-            # Mix imaginary parts
-            for image_key, weight in weights_b.items():
-                if image_key in self.images:
-                    component = self._get_fft(image_key)['imaginary'] * weight
-                    if frequency_mask is not None:
-                        component = component * frequency_mask
-                    mixed_comp_b += component
-            
-            # Reconstruct: Real + j*Imag
-            aggregate_matrix = mixed_comp_a + 1j * mixed_comp_b
-        
-        else:
-            raise ValueError(f"Invalid mode: {mode}")
+        # Use the accumulated mixed FFT
+        aggregate_matrix = mixed_fft
         
         # IFFT
         aggregate_unshifted = np.fft.ifftshift(aggregate_matrix)

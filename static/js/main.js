@@ -12,7 +12,12 @@ const state = {
         img3: { brightness: 1.0, contrast: 1.0 },
         img4: { brightness: 1.0, contrast: 1.0 }
     },
-    mixingMode: 'magnitude_phase',
+    mixingModes: {
+        img1: 'magnitude_phase',
+        img2: 'magnitude_phase',
+        img3: 'magnitude_phase',
+        img4: 'magnitude_phase'
+    },
     weightsA: { img1: 0, img2: 0, img3: 0, img4: 0 },
     weightsB: { img1: 0, img2: 0, img3: 0, img4: 0 },
     selectedOutput: 1,
@@ -373,27 +378,31 @@ function initializeComponentSelects() {
 
 // Mixing Mode Selection
 function initializeMixingMode() {
-    const magPhase = document.getElementById('mode-mag-phase');
-    const realImag = document.getElementById('mode-real-imag');
-    
-    magPhase.addEventListener('change', () => {
-        if (magPhase.checked) {
-            state.mixingMode = 'magnitude_phase';
-            updateModeLabels('Magnitude', 'Phase');
-        }
-    });
-    
-    realImag.addEventListener('change', () => {
-        if (realImag.checked) {
-            state.mixingMode = 'real_imaginary';
-            updateModeLabels('Real', 'Imaginary');
-        }
-    });
+    for (let i = 1; i <= 4; i++) {
+        const modeSelect = document.getElementById(`mode-select-${i}`);
+        const imageKey = `img${i}`;
+        
+        modeSelect.addEventListener('change', () => {
+            state.mixingModes[imageKey] = modeSelect.value;
+            updateModeLabelsForImage(i, modeSelect.value);
+        });
+        
+        // Initialize labels
+        updateModeLabelsForImage(i, state.mixingModes[imageKey]);
+    }
 }
 
-function updateModeLabels(labelA, labelB) {
-    document.querySelectorAll('#label-a').forEach(el => el.textContent = labelA);
-    document.querySelectorAll('#label-b').forEach(el => el.textContent = labelB);
+function updateModeLabelsForImage(index, mode) {
+    const labelA = document.getElementById(`label-a-${index}`);
+    const labelB = document.getElementById(`label-b-${index}`);
+    
+    if (mode === 'magnitude_phase') {
+        labelA.textContent = 'Magnitude';
+        labelB.textContent = 'Phase';
+    } else {
+        labelA.textContent = 'Real';
+        labelB.textContent = 'Imaginary';
+    }
 }
 
 async function updateComponentPreview(index) {
@@ -492,7 +501,7 @@ async function performMixing() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                mode: state.mixingMode,
+                modes: state.mixingModes,
                 weights_a: state.weightsA,
                 weights_b: state.weightsB,
                 filter: state.filter

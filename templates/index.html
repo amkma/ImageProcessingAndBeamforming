@@ -36,7 +36,22 @@
             </div>
         </div>
 
-        <!-- Row 2: Component Selection Comboboxes -->
+        <!-- Row 2: Mixing Mode Selector -->
+        <div class="row filter-row">
+            <div class="filter-controls">
+                <div class="filter-group">
+                    <label class="filter-label">Mixing Mode:</label>
+                    <div class="filter-toggle">
+                        <input type="radio" id="mode-mag-phase" name="mixing-mode" value="magnitude_phase" checked>
+                        <label for="mode-mag-phase">Magnitude & Phase</label>
+                        <input type="radio" id="mode-real-imag" name="mixing-mode" value="real_imaginary">
+                        <label for="mode-real-imag">Real & Imaginary</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Row 3: Component Selection Comboboxes -->
         <div class="row combobox-row">
             <div class="combobox-container">
                 <select id="component-select-1" class="component-select">
@@ -72,7 +87,7 @@
             </div>
         </div>
 
-        <!-- Row 3: Component Display Viewports -->
+        <!-- Row 4: Component Display Viewports -->
         <div class="row component-row">
             <div class="viewport-container">
                 <div class="viewport component-viewport" id="component-viewport-1">
@@ -128,27 +143,47 @@
             </div>
         </div>
 
-        <!-- Row 4: Weight Sliders -->
+        <!-- Row 4: Component A Weights -->
         <div class="row slider-row">
             <div class="slider-container">
-                <label for="weight-slider-1"><span id="weight-value-1">25</span>%</label>
-                <input type="range" id="weight-slider-1" class="weight-slider" min="0" max="100" value="25">
+                <label for="weight-a-1"><span id="label-a">Magnitude</span>: <span id="weight-a-value-1">0</span>%</label>
+                <input type="range" id="weight-a-1" class="weight-slider" min="0" max="100" value="0">
             </div>
             <div class="slider-container">
-                <label for="weight-slider-2"><span id="weight-value-2">25</span>%</label>
-                <input type="range" id="weight-slider-2" class="weight-slider" min="0" max="100" value="25">
+                <label for="weight-a-2"><span id="label-a">Magnitude</span>: <span id="weight-a-value-2">0</span>%</label>
+                <input type="range" id="weight-a-2" class="weight-slider" min="0" max="100" value="0">
             </div>
             <div class="slider-container">
-                <label for="weight-slider-3"><span id="weight-value-3">25</span>%</label>
-                <input type="range" id="weight-slider-3" class="weight-slider" min="0" max="100" value="25">
+                <label for="weight-a-3"><span id="label-a">Magnitude</span>: <span id="weight-a-value-3">0</span>%</label>
+                <input type="range" id="weight-a-3" class="weight-slider" min="0" max="100" value="0">
             </div>
             <div class="slider-container">
-                <label for="weight-slider-4"><span id="weight-value-4">25</span>%</label>
-                <input type="range" id="weight-slider-4" class="weight-slider" min="0" max="100" value="25">
+                <label for="weight-a-4"><span id="label-a">Magnitude</span>: <span id="weight-a-value-4">0</span>%</label>
+                <input type="range" id="weight-a-4" class="weight-slider" min="0" max="100" value="0">
             </div>
         </div>
 
-        <!-- Frequency Filter Controls -->
+        <!-- Row 5: Component B Weights -->
+        <div class="row slider-row">
+            <div class="slider-container">
+                <label for="weight-b-1"><span id="label-b">Phase</span>: <span id="weight-b-value-1">0</span>%</label>
+                <input type="range" id="weight-b-1" class="weight-slider" min="0" max="100" value="0">
+            </div>
+            <div class="slider-container">
+                <label for="weight-b-2"><span id="label-b">Phase</span>: <span id="weight-b-value-2">0</span>%</label>
+                <input type="range" id="weight-b-2" class="weight-slider" min="0" max="100" value="0">
+            </div>
+            <div class="slider-container">
+                <label for="weight-b-3"><span id="label-b">Phase</span>: <span id="weight-b-value-3">0</span>%</label>
+                <input type="range" id="weight-b-3" class="weight-slider" min="0" max="100" value="0">
+            </div>
+            <div class="slider-container">
+                <label for="weight-b-4"><span id="label-b">Phase</span>: <span id="weight-b-value-4">0</span>%</label>
+                <input type="range" id="weight-b-4" class="weight-slider" min="0" max="100" value="0">
+            </div>
+        </div>
+
+        <!-- Row 7: Frequency Filter Controls -->
         <div class="row filter-row">
             <div class="filter-controls">
                 <div class="filter-group">
@@ -169,7 +204,7 @@
             </div>
         </div>
 
-        <!-- Row 5: Output Viewports -->
+        <!-- Row 8: Output Viewports -->
         <div class="row output-row">
             <div class="viewport-container output-container">
                 <div class="viewport output-viewport" id="output-viewport-1">
@@ -186,6 +221,12 @@
         <!-- Status Indicator -->
         <div class="status-indicator" id="status-indicator">
             <span id="status-text"></span>
+        </div>
+        
+        <!-- Adjustment Indicator -->
+        <div class="adjustment-indicator" id="adjustment-indicator">
+            <div class="adjustment-value">Brightness: <span id="adj-brightness">1.00</span></div>
+            <div class="adjustment-value">Contrast: <span id="adj-contrast">1.00</span></div>
         </div>
     </div>
 

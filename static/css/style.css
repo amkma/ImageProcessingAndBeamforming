@@ -41,20 +41,24 @@ body {
 .viewport-container {
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
 }
 
 .viewport {
     border: 2px solid #ff9000;
     background-color: #000000;
-    aspect-ratio: 16 / 9;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     position: relative;
     overflow: hidden;
     cursor: pointer;
     transition: border-color 0.3s;
-    max-height: 180px;
+    width: 200px;
+    height: 200px;
+    max-width: 200px;
+    max-height: 200px;
 }
 
 .viewport:hover {
@@ -62,6 +66,7 @@ body {
 }
 
 .viewport img {
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -85,12 +90,14 @@ body {
 
 .component-viewport {
     cursor: default;
+    width: 200px;
+    height: 200px;
+    max-width: 100%;
+    max-height: 200px;
 }
 
 .output-viewport {
-    aspect-ratio: 16 / 9;
     cursor: pointer;
-    max-height: 280px;
 }
 
 .output-container {
@@ -192,6 +199,50 @@ body {
 .viewport.dragging {
     cursor: move;
     border-color: #ffb84d;
+}
+
+/* Adjustment Indicator - Shows brightness/contrast while dragging */
+.adjustment-indicator {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 20px 32px;
+    background: linear-gradient(135deg, rgba(10, 10, 10, 0.98) 0%, rgba(0, 0, 0, 1) 100%);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 3px solid rgba(255, 144, 0, 0.9);
+    border-radius: 12px;
+    color: #ff9000;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 2000;
+    box-shadow: 
+        0 10px 40px rgba(0, 0, 0, 0.8),
+        0 0 35px rgba(255, 144, 0, 0.4);
+    min-width: 240px;
+    text-align: center;
+    transition: opacity 0.2s;
+}
+
+.adjustment-indicator.visible {
+    opacity: 1;
+}
+
+.adjustment-value {
+    padding: 6px 0;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+}
+
+.adjustment-value span {
+    color: #ffb84d;
+    font-weight: 700;
+    font-size: 1.2rem;
+    text-shadow: 0 0 10px rgba(255, 184, 77, 0.3);
 }
 
 /* Status Indicator */

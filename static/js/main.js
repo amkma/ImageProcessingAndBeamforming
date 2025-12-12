@@ -7,24 +7,28 @@ const state = {
         img4: null
     },
     adjustments: {
-        img1: { brightness: 0, contrast: 1 },
-        img2: { brightness: 0, contrast: 1 },
-        img3: { brightness: 0, contrast: 1 },
-        img4: { brightness: 0, contrast: 1 }
+        img1: { brightness: 1.0, contrast: 1.0 },
+        img2: { brightness: 1.0, contrast: 1.0 },
+        img3: { brightness: 1.0, contrast: 1.0 },
+        img4: { brightness: 1.0, contrast: 1.0 }
     },
+    mixingMode: 'magnitude_phase',
+    weightsA: { img1: 0, img2: 0, img3: 0, img4: 0 },
+    weightsB: { img1: 0, img2: 0, img3: 0, img4: 0 },
     selectedOutput: 1,
     pendingRequest: null,
     dragState: null,
     filter: {
-        mode: 'inner',  // 'inner' or 'outer'
+        mode: 'inner',
         rect: {
-            x: 0.25,      // Normalized coordinates (0-1)
+            x: 0.25,
             y: 0.25,
             width: 0.5,
             height: 0.5
         }
     },
-    rectangleDragState: null
+    rectangleDragState: null,
+    componentDragState: null
 };
 
 // Status indicator management
@@ -55,7 +59,9 @@ function hideStatus() {
 document.addEventListener('DOMContentLoaded', () => {
     initializeFileInputs();
     initializeViewportDrag();
+    initializeComponentViewportDrag();
     initializeComponentSelects();
+    initializeMixingMode();
     initializeSliders();
     initializeButtons();
     initializeOutputSelection();
@@ -113,10 +119,15 @@ async function handleFileUpload(file, imageKey, index) {
             // Use the processed grayscale image from backend
             state.images[imageKey] = data.grayscale_image;
             displayImage(`input-viewport-${index}`, data.grayscale_image);
+            
+            // Auto-resize to smallest dimensions (enforces unified sizing)
+            await autoResize();
+            
+            // Update component preview after resize (triggers FFT recalculation)
             updateComponentPreview(index);
             
-            // Auto-resize after upload
-            await autoResize();
+            // Resize all input viewports to smallest after upload completes
+            setTimeout(() => resizeAllInputViewportsToSmallest(), 100);
             
             // Update filter rectangle visibility now that image is loaded
             updateAllRectangles();
@@ -126,22 +137,78 @@ async function handleFileUpload(file, imageKey, index) {
     }
 }
 
-function displayImage(viewportId, imageSrc, adjustments = null) {
+function displayImage(viewportId, imageSrc) {
     const viewport = document.getElementById(viewportId);
     viewport.innerHTML = '';
     
     const img = document.createElement('img');
     img.src = imageSrc;
     
-    // Apply adjustments if provided
-    if (adjustments) {
-        img.style.filter = `brightness(${1 + adjustments.brightness}) contrast(${adjustments.contrast})`;
-    }
+    // When image loads, trigger resize for input viewports
+    img.onload = function() {
+        if (viewportId.includes('input-viewport')) {
+            resizeAllInputViewportsToSmallest();
+        }
+    };
     
     viewport.appendChild(img);
 }
 
-// Mouse Drag for Brightness/Contrast
+// Resize all input viewports to fit smallest image with aspect ratio preserved
+function resizeAllInputViewportsToSmallest() {
+    const inputViewports = [
+        { id: 'input-viewport-1', img: null },
+        { id: 'input-viewport-2', img: null },
+        { id: 'input-viewport-3', img: null },
+        { id: 'input-viewport-4', img: null }
+    ];
+    
+    // Collect all loaded images from input viewports
+    let minWidth = Infinity;
+    let minHeight = Infinity;
+    let hasAnyImage = false;
+    
+    inputViewports.forEach(viewport => {
+        const element = document.getElementById(viewport.id);
+        const img = element?.querySelector('img');
+        
+        if (img && img.naturalWidth > 0 && img.naturalHeight > 0) {
+            hasAnyImage = true;
+            minWidth = Math.min(minWidth, img.naturalWidth);
+            minHeight = Math.min(minHeight, img.naturalHeight);
+        }
+    });
+    
+    if (!hasAnyImage) return;
+    
+    // Calculate aspect ratio from smallest image
+    const aspectRatio = minWidth / minHeight;
+    const maxSize = 200;
+    
+    let finalWidth, finalHeight;
+    
+    // Fit within 200x200 while preserving aspect ratio
+    if (aspectRatio > 1) {
+        // Wider than tall
+        finalWidth = maxSize;
+        finalHeight = Math.round(maxSize / aspectRatio);
+    } else {
+        // Taller than wide
+        finalHeight = maxSize;
+        finalWidth = Math.round(maxSize * aspectRatio);
+    }
+    
+    // Apply calculated dimensions to all input viewports
+    inputViewports.forEach(viewport => {
+        const element = document.getElementById(viewport.id);
+        if (element) {
+            element.style.width = finalWidth + 'px';
+            element.style.height = finalHeight + 'px';
+        }
+    });
+}
+
+// Mouse Drag for Brightness/Contrast Adjustments
 function initializeViewportDrag() {
     for (let i = 1; i <= 4; i++) {
         const viewport = document.getElementById(`input-viewport-${i}`);
@@ -156,11 +223,15 @@ function initializeViewportDrag() {
             state.dragState = {
                 viewport: viewport,
                 imageKey: imageKey,
+                index: i,
                 startX: e.clientX,
                 startY: e.clientY,
                 initialBrightness: state.adjustments[imageKey].brightness,
                 initialContrast: state.adjustments[imageKey].contrast
             };
+            
+            viewport.classList.add('dragging');
+            showAdjustmentIndicator(state.dragState.initialBrightness, state.dragState.initialContrast);
             
             document.addEventListener('mousemove', handleDrag);
             document.addEventListener('mouseup', handleDragEnd);
@@ -174,13 +245,15 @@ function handleDrag(e) {
     const deltaX = e.clientX - state.dragState.startX;
     const deltaY = e.clientY - state.dragState.startY;
     
-    // Up/Down = Brightness (-1 to 1)
-    const brightness = state.dragState.initialBrightness - (deltaY / 200);
-    const clampedBrightness = Math.max(-1, Math.min(1, brightness));
+    // Up/Down = Brightness (0.0 to 2.0)
+    // Drag up increases brightness, drag down decreases
+    const brightness = state.dragState.initialBrightness - (deltaY / 300);
+    const clampedBrightness = Math.max(0.0, Math.min(2.0, brightness));
     
-    // Left/Right = Contrast (0.5 to 2)
-    const contrast = state.dragState.initialContrast + (deltaX / 200);
-    const clampedContrast = Math.max(0.5, Math.min(2, contrast));
+    // Left/Right = Contrast (0.0 to 3.0)
+    // Drag right increases contrast, drag left decreases
+    const contrast = state.dragState.initialContrast + (deltaX / 300);
+    const clampedContrast = Math.max(0.0, Math.min(3.0, contrast));
     
     // Update state
     state.adjustments[state.dragState.imageKey] = {
@@ -188,51 +261,67 @@ function handleDrag(e) {
         contrast: clampedContrast
     };
     
-    // Apply visual feedback
-    const img = state.dragState.viewport.querySelector('img');
-    if (img) {
-        img.style.filter = `brightness(${1 + clampedBrightness}) contrast(${clampedContrast})`;
-    }
+    // Update indicator
+    showAdjustmentIndicator(clampedBrightness, clampedContrast);
 }
 
 async function handleDragEnd() {
     if (!state.dragState) return;
     
     const imageKey = state.dragState.imageKey;
+    const index = state.dragState.index;
     const adjustments = state.adjustments[imageKey];
     
-    // Apply adjustments to backend - treats as new input image
+    state.dragState.viewport.classList.remove('dragging');
+    
+    // Hide indicator after half a second
+    setTimeout(() => {
+        hideAdjustmentIndicator();
+    }, 500);
+    
+    // Apply adjustments to backend
     try {
+        showStatus('Applying adjustments...', 'loading');
+        
         const response = await fetch('/api/apply-adjustments/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 image_key: imageKey,
                 brightness: adjustments.brightness,
-                contrast: adjustments.contrast
+                contrast: adjustments.contrast,
+                reference: 'original'
             })
         });
         
         const data = await response.json();
         
         if (data.success) {
+            // Update state with backend-validated values
+            state.adjustments[imageKey] = {
+                brightness: data.applied_brightness,
+                contrast: data.applied_contrast
+            };
+            
             // Update displayed image with backend-processed version
             state.images[imageKey] = data.adjusted_image;
-            
-            // Get viewport index from imageKey (img1 -> 1)
-            const index = parseInt(imageKey.replace('img', ''));
             displayImage(`input-viewport-${index}`, data.adjusted_image);
             
-            // Update component preview to reflect new FFT
+            // Recalculate and cache FFT after brightness/contrast adjustment
             updateComponentPreview(index);
             
-            // Ensure filter rectangles remain visible and positioned correctly
+            // Ensure filter rectangles remain visible
             setTimeout(() => {
                 updateAllRectangles();
             }, 100);
+            
+            showStatus('Adjustments applied', 'done');
+        } else {
+            showStatus('Failed: ' + data.error, 'done');
         }
     } catch (error) {
         console.error('Failed to apply adjustments:', error);
+        showStatus('Error applying adjustments', 'done');
     }
     
     // Clean up drag state
@@ -241,21 +330,75 @@ async function handleDragEnd() {
     document.removeEventListener('mouseup', handleDragEnd);
 }
 
-// Component Selection
+// Adjustment Indicator Functions
+function showAdjustmentIndicator(brightness, contrast) {
+    const indicator = document.getElementById('adjustment-indicator');
+    const brightnessSpan = document.getElementById('adj-brightness');
+    const contrastSpan = document.getElementById('adj-contrast');
+    
+    brightnessSpan.textContent = brightness.toFixed(2);
+    contrastSpan.textContent = contrast.toFixed(2);
+    
+    indicator.classList.add('visible');
+}
+
+function hideAdjustmentIndicator() {
+    const indicator = document.getElementById('adjustment-indicator');
+    indicator.classList.remove('visible');
+}
+
+// Component Viewport Brightness/Contrast - DISABLED for FT viewports
+function initializeComponentViewportDrag() {
+    // FT viewports do NOT accept brightness/contrast adjustments
+    // This function is intentionally disabled per requirements
+}
+
+function handleComponentDrag(e) {
+    // DISABLED - FT viewports should not have brightness/contrast adjustments
+}
+
+function handleComponentDragEnd() {
+    // DISABLED - FT viewports should not have brightness/contrast adjustments
+}
+
+// Component Selection Dropdowns
 function initializeComponentSelects() {
     for (let i = 1; i <= 4; i++) {
         const select = document.getElementById(`component-select-${i}`);
         select.addEventListener('change', () => {
             updateComponentPreview(i);
-            // NO AUTO-TRIGGER - mixing only on output viewport click
         });
     }
+}
+
+// Mixing Mode Selection
+function initializeMixingMode() {
+    const magPhase = document.getElementById('mode-mag-phase');
+    const realImag = document.getElementById('mode-real-imag');
+    
+    magPhase.addEventListener('change', () => {
+        if (magPhase.checked) {
+            state.mixingMode = 'magnitude_phase';
+            updateModeLabels('Magnitude', 'Phase');
+        }
+    });
+    
+    realImag.addEventListener('change', () => {
+        if (realImag.checked) {
+            state.mixingMode = 'real_imaginary';
+            updateModeLabels('Real', 'Imaginary');
+        }
+    });
+}
+
+function updateModeLabels(labelA, labelB) {
+    document.querySelectorAll('#label-a').forEach(el => el.textContent = labelA);
+    document.querySelectorAll('#label-b').forEach(el => el.textContent = labelB);
 }
 
 async function updateComponentPreview(index) {
     const imageKey = `img${index}`;
     
-    // CRITICAL: Verify image exists before updating preview
     if (!state.images[imageKey]) {
         console.warn(`Cannot update component preview - no image loaded for ${imageKey}`);
         return;
@@ -263,8 +406,6 @@ async function updateComponentPreview(index) {
     
     const component = document.getElementById(`component-select-${index}`).value;
     const viewport = document.getElementById(`component-viewport-${index}`);
-    
-    // Save overlay and rectangle before clearing
     const overlay = document.getElementById(`filter-overlay-${index}`);
     const overlayParent = overlay.parentNode;
     overlayParent.removeChild(overlay);
@@ -285,11 +426,8 @@ async function updateComponentPreview(index) {
         
         if (data.success) {
             displayImage(`component-viewport-${index}`, data.image);
-            
-            // Re-add overlay after image loads
             viewport.appendChild(overlay);
             
-            // Update rectangle positions and visibility
             setTimeout(() => {
                 updateAllRectangles();
             }, 50);
@@ -306,12 +444,26 @@ async function updateComponentPreview(index) {
 // Slider Handling
 function initializeSliders() {
     for (let i = 1; i <= 4; i++) {
-        const slider = document.getElementById(`weight-slider-${i}`);
-        const valueDisplay = document.getElementById(`weight-value-${i}`);
+        const imageKey = `img${i}`;
         
-        slider.addEventListener('input', (e) => {
-            valueDisplay.textContent = e.target.value;
-            // NO AUTO-TRIGGER - only on output viewport click
+        // Component A sliders
+        const sliderA = document.getElementById(`weight-a-${i}`);
+        const valueA = document.getElementById(`weight-a-value-${i}`);
+        
+        sliderA.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            valueA.textContent = val;
+            state.weightsA[imageKey] = val / 100;
+        });
+        
+        // Component B sliders
+        const sliderB = document.getElementById(`weight-b-${i}`);
+        const valueB = document.getElementById(`weight-b-value-${i}`);
+        
+        sliderB.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            valueB.textContent = val;
+            state.weightsB[imageKey] = val / 100;
         });
     }
 }
@@ -319,12 +471,10 @@ function initializeSliders() {
 // Mixing only on explicit output viewport click - no auto-triggering
 
 async function performMixing() {
-    // Cancel pending request
     if (state.pendingRequest) {
         state.pendingRequest.abort();
     }
     
-    // CRITICAL: Check if any images are loaded
     if (!hasLoadedImages()) {
         console.warn('Cannot perform mixing - no images loaded');
         showStatus('No images loaded', 'done');
@@ -332,33 +482,8 @@ async function performMixing() {
         return;
     }
     
-    // Get weights
-    const weights = {};
-    const components = {};
-    let hasValidWeight = false;
+    showStatus('Computing IFFT...', 'loading');
     
-    for (let i = 1; i <= 4; i++) {
-        const imageKey = `img${i}`;
-        if (state.images[imageKey]) {
-            const weight = parseFloat(document.getElementById(`weight-slider-${i}`).value) / 100;
-            weights[imageKey] = weight;
-            
-            const component = document.getElementById(`component-select-${i}`).value;
-            components[imageKey] = component;
-            
-            if (weight > 0) hasValidWeight = true;
-        }
-    }
-    
-    if (!hasValidWeight) {
-        console.warn('Cannot perform mixing - all weights are zero');
-        return;
-    }
-    
-    // Show loading status
-    showStatus('Computing IFFT with filter...', 'loading');
-    
-    // Create abortable request
     const controller = new AbortController();
     state.pendingRequest = controller;
     
@@ -367,9 +492,10 @@ async function performMixing() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                weights: weights,
-                components: components,
-                filter: state.filter  // Include filter parameters
+                mode: state.mixingMode,
+                weights_a: state.weightsA,
+                weights_b: state.weightsB,
+                filter: state.filter
             }),
             signal: controller.signal
         });
@@ -420,7 +546,7 @@ function initializeOutputSelection() {
     document.querySelector('.output-container').classList.add('selected');
 }
 
-// Auto-resize function
+// Auto-resize function - enforces smallest dimensions across all inputs
 async function autoResize() {
     try {
         const response = await fetch('/api/resize/', {
@@ -430,10 +556,23 @@ async function autoResize() {
         const data = await response.json();
         
         if (data.success) {
-            // Reload all images to reflect resize
+            // Reload all input and component images to reflect resize
             for (let i = 1; i <= 4; i++) {
                 const imageKey = `img${i}`;
                 if (state.images[imageKey]) {
+                    // Fetch updated input image after resize
+                    try {
+                        const imgResponse = await fetch(`/api/get-image/${imageKey}/`);
+                        const imgData = await imgResponse.json();
+                        if (imgData.success) {
+                            state.images[imageKey] = imgData.image;
+                            displayImage(`input-viewport-${i}`, imgData.image);
+                        }
+                    } catch (err) {
+                        console.error(`Failed to reload ${imageKey}:`, err);
+                    }
+                    
+                    // Update component preview (triggers FFT recalculation with resized image)
                     updateComponentPreview(i);
                 }
             }

@@ -6,7 +6,9 @@ import base64
 
 class ImageViewer:
     def __init__(self):
-        self.images = {}  # Store up to 4 images
+        self.images = {}  # Store up to 4 currently displayed images
+        self.original_images = {}  # Store original uploaded images (before adjustments)
+        self.last_adjustments = {}  # Track last-applied brightness/contrast for each image
         self.fft_cache = {}  # Cache FFT results
         
     def load_image(self, image_key, image_data):
@@ -25,7 +27,16 @@ class ImageViewer:
             
         # FORCED GRAYSCALE CONVERSION - No color images allowed
         img_gray = img.convert('L')
-        self.images[image_key] = np.array(img_gray, dtype=np.float64)
+        img_array = np.array(img_gray, dtype=np.float64)
+        
+        # Store ORIGINAL for reference=original mode
+        self.original_images[image_key] = img_array.copy()
+        
+        # Store current display image
+        self.images[image_key] = img_array
+        
+        # Initialize adjustment tracking (brightness=1.0, contrast=1.0)
+        self.last_adjustments[image_key] = {'brightness': 1.0, 'contrast': 1.0}
         
         # PRE-COMPUTE FFT immediately upon upload
         fft_result = np.fft.fftshift(np.fft.fft2(self.images[image_key]))
@@ -57,9 +68,16 @@ class ImageViewer:
         # Resize all images to smallest dimensions
         for key in self.images:
             if self.images[key].shape != (min_height, min_width):
+                # Resize current display image
                 img_pil = Image.fromarray(self.images[key].astype(np.uint8))
                 img_resized = img_pil.resize((min_width, min_height), Image.LANCZOS)
                 self.images[key] = np.array(img_resized, dtype=np.float64)
+                
+                # Also resize original image
+                if key in self.original_images:
+                    orig_pil = Image.fromarray(self.original_images[key].astype(np.uint8))
+                    orig_resized = orig_pil.resize((min_width, min_height), Image.LANCZOS)
+                    self.original_images[key] = np.array(orig_resized, dtype=np.float64)
                 
                 # RECOMPUTE FFT after resizing
                 fft_result = np.fft.fftshift(np.fft.fft2(self.images[key]))
@@ -143,22 +161,17 @@ class ImageViewer:
         fft_cache = self._get_fft(image_key)
         return fft_cache['imaginary']
     
-    def mix_images(self, weights, component_selections, filter_params=None):
+    def mix_images(self, mode, weights_a, weights_b, filter_params=None):
         """
-        Mix FFTs using STRICT COMPONENT-AWARE ALGORITHM with FREQUENCY DOMAIN FILTERING:
-        1. Normalize weights to sum to 1.0
-        2. Determine mixing mode based on selected components
-        3. For Magnitude/Phase mode: compute weighted averages separately, reconstruct via Magnitude * exp(j*Phase)
-        4. For Real/Imaginary mode: compute weighted averages separately, reconstruct via Real + j*Imaginary
-        5. APPLY FREQUENCY FILTER MASK to weighted components (before summation)
-        6. Apply IFFT to reconstructed complex FFT
-        7. Clip to 0-255 range
+        Mix FFTs using dual-component weighting:
+        - Mode 'magnitude_phase': Mix magnitudes and phases separately
+        - Mode 'real_imaginary': Mix real and imaginary parts separately
         
         Args:
-            weights: dict of {image_key: weight_value} - raw weight values (0-1)
-            component_selections: dict of {image_key: component_type}
-                component_type can be 'magnitude', 'phase', 'real', 'imaginary'
-            filter_params: dict with 'mode' ('inner' or 'outer'), 'size' (0-100)
+            mode: 'magnitude_phase' or 'real_imaginary'
+            weights_a: dict {image_key: weight} for component A (magnitude or real)
+            weights_b: dict {image_key: weight} for component B (phase or imaginary)
+            filter_params: dict with 'mode' ('inner'/'outer') and 'rect'
                 
         Returns:
             numpy.ndarray: Mixed output image (uint8)
@@ -166,39 +179,9 @@ class ImageViewer:
         if len(self.images) == 0:
             raise ValueError("No images loaded")
         
-        # STEP 1: NORMALIZE WEIGHTS to sum to 1.0
-        valid_weights = {k: v for k, v in weights.items() if k in self.images and v > 0}
-        if not valid_weights:
-            shape = next(iter(self.images.values())).shape
-            return np.zeros(shape, dtype=np.uint8)
-        
-        total_weight = sum(valid_weights.values())
-        if total_weight > 0:
-            normalized_weights = {k: v / total_weight for k, v in valid_weights.items()}
-        else:
-            normalized_weights = valid_weights
-        
-        # STEP 2: DETERMINE MIXING MODE - categorize components
-        has_magnitude = False
-        has_phase = False
-        has_real = False
-        has_imaginary = False
-        
-        for image_key in normalized_weights.keys():
-            component_type = component_selections.get(image_key, 'magnitude')
-            if component_type == 'magnitude':
-                has_magnitude = True
-            elif component_type == 'phase':
-                has_phase = True
-            elif component_type == 'real':
-                has_real = True
-            elif component_type == 'imaginary':
-                has_imaginary = True
-        
-        # Get reference shape
         ref_shape = next(iter(self.images.values())).shape
         
-        # CREATE FREQUENCY FILTER MASK if filter parameters provided
+        # Filter mask
         frequency_mask = None
         if filter_params and filter_params.get('rect'):
             frequency_mask = self._create_frequency_mask(
@@ -207,95 +190,54 @@ class ImageViewer:
                 filter_params.get('rect')
             )
         
-        # STEP 3: COMPUTE WEIGHTED AVERAGES FOR SELECTED COMPONENTS
-        # Mode 1: Magnitude/Phase (polar form)
-        if has_magnitude or has_phase:
-            # Calculate weighted average for magnitude
-            magnitude_sum = np.zeros(ref_shape, dtype=np.float64)
-            magnitude_total_weight = 0.0
-            
-            for image_key, weight in normalized_weights.items():
-                component_type = component_selections.get(image_key, 'magnitude')
-                if component_type == 'magnitude':
-                    fft_cache = self._get_fft(image_key)
-                    component_data = fft_cache['magnitude'] * weight
-                    # APPLY FREQUENCY FILTER MASK
-                    if frequency_mask is not None:
-                        component_data = component_data * frequency_mask
-                    magnitude_sum += component_data
-                    magnitude_total_weight += weight
-            
-            # Calculate weighted average for phase
-            phase_sum = np.zeros(ref_shape, dtype=np.float64)
-            phase_total_weight = 0.0
-            
-            for image_key, weight in normalized_weights.items():
-                component_type = component_selections.get(image_key, 'magnitude')
-                if component_type == 'phase':
-                    fft_cache = self._get_fft(image_key)
-                    component_data = fft_cache['phase'] * weight
-                    # APPLY FREQUENCY FILTER MASK
-                    if frequency_mask is not None:
-                        component_data = component_data * frequency_mask
-                    phase_sum += component_data
-                    phase_total_weight += weight
-            
-            # If only magnitude or only phase selected, use first image for missing component
-            if magnitude_total_weight == 0:
-                first_key = next(iter(normalized_weights.keys()))
-                magnitude_sum = self._get_fft(first_key)['magnitude']
-            
-            if phase_total_weight == 0:
-                first_key = next(iter(normalized_weights.keys()))
-                phase_sum = self._get_fft(first_key)['phase']
-            
-            # RECONSTRUCT: Magnitude * exp(j * Phase)
-            aggregate_matrix = magnitude_sum * np.exp(1j * phase_sum)
+        # Initialize accumulators
+        mixed_comp_a = np.zeros(ref_shape, dtype=np.float64)
+        mixed_comp_b = np.zeros(ref_shape, dtype=np.float64)
         
-        # Mode 2: Real/Imaginary (rectangular form)
-        elif has_real or has_imaginary:
-            # Calculate weighted average for real
-            real_sum = np.zeros(ref_shape, dtype=np.float64)
-            real_total_weight = 0.0
-            
-            for image_key, weight in normalized_weights.items():
-                component_type = component_selections.get(image_key, 'magnitude')
-                if component_type == 'real':
-                    fft_cache = self._get_fft(image_key)
-                    component_data = fft_cache['real'] * weight
-                    # APPLY FREQUENCY FILTER MASK
+        if mode == 'magnitude_phase':
+            # Mix magnitudes
+            for image_key, weight in weights_a.items():
+                if image_key in self.images:
+                    component = self._get_fft(image_key)['magnitude'] * weight
                     if frequency_mask is not None:
-                        component_data = component_data * frequency_mask
-                    real_sum += component_data
-                    real_total_weight += weight
+                        component = component * frequency_mask
+                    mixed_comp_a += component
             
-            # Calculate weighted average for imaginary
-            imaginary_sum = np.zeros(ref_shape, dtype=np.float64)
-            imaginary_total_weight = 0.0
-            
-            for image_key, weight in normalized_weights.items():
-                component_type = component_selections.get(image_key, 'magnitude')
-                if component_type == 'imaginary':
-                    fft_cache = self._get_fft(image_key)
-                    component_data = fft_cache['imaginary'] * weight
-                    # APPLY FREQUENCY FILTER MASK
+            # Mix phases
+            for image_key, weight in weights_b.items():
+                if image_key in self.images:
+                    component = self._get_fft(image_key)['phase'] * weight
                     if frequency_mask is not None:
-                        component_data = component_data * frequency_mask
-                    imaginary_sum += component_data
-                    imaginary_total_weight += weight
+                        component = component * frequency_mask
+                    mixed_comp_b += component
             
-            # RECONSTRUCT: Real + j*Imaginary
-            aggregate_matrix = real_sum + 1j * imaginary_sum
+            # Reconstruct: Mag * exp(j*Phase)
+            aggregate_matrix = mixed_comp_a * np.exp(1j * mixed_comp_b)
+        
+        elif mode == 'real_imaginary':
+            # Mix real parts
+            for image_key, weight in weights_a.items():
+                if image_key in self.images:
+                    component = self._get_fft(image_key)['real'] * weight
+                    if frequency_mask is not None:
+                        component = component * frequency_mask
+                    mixed_comp_a += component
+            
+            # Mix imaginary parts
+            for image_key, weight in weights_b.items():
+                if image_key in self.images:
+                    component = self._get_fft(image_key)['imaginary'] * weight
+                    if frequency_mask is not None:
+                        component = component * frequency_mask
+                    mixed_comp_b += component
+            
+            # Reconstruct: Real + j*Imag
+            aggregate_matrix = mixed_comp_a + 1j * mixed_comp_b
         
         else:
-            # No valid components - return black
-            return np.zeros(ref_shape, dtype=np.uint8)
+            raise ValueError(f"Invalid mode: {mode}")
         
-        # STEP 4: Apply IFFT to the reconstructed complex FFT
-        # aggregate_matrix is in shifted frequency domain
-        # Need to: ifftshift -> ifft2 -> take real part
-        
-        # Unshift to prepare for IFFT
+        # IFFT
         aggregate_unshifted = np.fft.ifftshift(aggregate_matrix)
         
         # Perform IFFT
@@ -365,36 +307,82 @@ class ImageViewer:
         
         return mask
     
-    def apply_brightness_contrast(self, image_key, brightness, contrast):
+    def apply_brightness_contrast(self, image_key, brightness, contrast, reference='original'):
         """
-        Apply brightness and contrast adjustments to an image and recalculate FFT.
-        This treats the adjusted image as a new input image.
+        Apply brightness and contrast adjustments with support for absolute and relative modes.
+        
+        Brightness: multiplier clamped to 0.00-2.00 (default 1.00)
+        Contrast: multiplier clamped to 0.00-3.00 (default 1.00)
         
         Args:
             image_key: Identifier for the image
-            brightness: Brightness adjustment (-1 to 1)
-            contrast: Contrast adjustment (0.5 to 2)
+            brightness: Brightness multiplier (0.00 to 2.00)
+            contrast: Contrast multiplier (0.00 to 3.00)
+            reference: 'original' (absolute) or 'current' (relative delta)
         
         Returns:
-            tuple: (adjusted_image, shape)
+            tuple: (adjusted_image, shape, applied_brightness, applied_contrast)
         """
         if image_key not in self.images:
             raise ValueError(f"Image '{image_key}' not loaded")
         
-        # Get original image
-        original = self.images[image_key].copy()
+        # VALIDATE AND CLAMP incoming values
+        brightness = max(0.0, min(2.0, float(brightness)))
+        contrast = max(0.0, min(3.0, float(contrast)))
         
-        # Apply adjustments
-        # Brightness: add offset
-        adjusted = original + (brightness * 255)
+        if reference == 'original':
+            # ABSOLUTE MODE: Apply to original image
+            source_image = self.original_images[image_key].copy()
+            
+            # Apply brightness (multiplier)
+            adjusted = source_image * brightness
+            
+            # Apply contrast (scale around midpoint 127.5)
+            adjusted = (adjusted - 127.5) * contrast + 127.5
+            
+            # Update last-applied values
+            self.last_adjustments[image_key] = {
+                'brightness': brightness,
+                'contrast': contrast
+            }
+            
+        elif reference == 'current':
+            # RELATIVE MODE: Apply delta from last-applied value
+            last_b = self.last_adjustments[image_key]['brightness']
+            last_c = self.last_adjustments[image_key]['contrast']
+            
+            # Calculate deltas
+            delta_brightness = brightness - last_b
+            delta_contrast = contrast - last_c
+            
+            # Start from currently displayed image
+            source_image = self.images[image_key].copy()
+            
+            # Apply deltas
+            # For brightness: multiply by (new/old) ratio
+            if last_b > 0:
+                adjusted = source_image * (brightness / last_b)
+            else:
+                adjusted = source_image * brightness
+            
+            # For contrast: apply additional contrast scaling
+            if last_c > 0:
+                adjusted = (adjusted - 127.5) * (contrast / last_c) + 127.5
+            else:
+                adjusted = (adjusted - 127.5) * contrast + 127.5
+            
+            # Update last-applied values
+            self.last_adjustments[image_key] = {
+                'brightness': brightness,
+                'contrast': contrast
+            }
+        else:
+            raise ValueError(f"Invalid reference mode: {reference}")
         
-        # Contrast: scale around midpoint (127.5)
-        adjusted = (adjusted - 127.5) * contrast + 127.5
-        
-        # Clip to valid range
+        # CLIP to valid range
         adjusted = np.clip(adjusted, 0, 255)
         
-        # UPDATE the image in place (treat as new input)
+        # UPDATE the current display image
         self.images[image_key] = adjusted
         
         # RECALCULATE FFT immediately
@@ -407,11 +395,13 @@ class ImageViewer:
             'imaginary': np.imag(fft_result)
         }
         
-        return adjusted, adjusted.shape
+        return adjusted, adjusted.shape, brightness, contrast
     
     def clear_images(self):
-        """Clear all loaded images and cache."""
+        """Clear all loaded images, originals, adjustments, and cache."""
         self.images.clear()
+        self.original_images.clear()
+        self.last_adjustments.clear()
         self.fft_cache.clear()
     
     def get_loaded_images(self):

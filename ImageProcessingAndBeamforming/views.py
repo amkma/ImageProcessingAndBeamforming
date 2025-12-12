@@ -141,26 +141,28 @@ def get_fft_component(request):
 @csrf_exempt
 def mix_images(request):
     """
-    Mix images based on weights and component selections with optional frequency filtering.
+    Mix images using dual-component weighting.
     POST params:
-        - weights: dict {image_key: weight_value}
-        - components: dict {image_key: component_type}
-        - filter: dict with 'mode' ('inner'/'outer') and 'size' (0-100) [optional]
+        - mode: 'magnitude_phase' or 'real_imaginary'
+        - weights_a: dict {image_key: weight} for component A
+        - weights_b: dict {image_key: weight} for component B
+        - filter: dict with 'mode' and 'rect' [optional]
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
     
     try:
         data = json.loads(request.body)
-        weights = data.get('weights', {})
-        components = data.get('components', {})
+        mode = data.get('mode', 'magnitude_phase')
+        weights_a = data.get('weights_a', {})
+        weights_b = data.get('weights_b', {})
         filter_params = data.get('filter', None)
         
-        if not weights:
+        if not weights_a and not weights_b:
             return JsonResponse({'error': 'No weights provided'}, status=400)
         
-        # Perform mixing with optional filtering
-        output_image = viewer.mix_images(weights, components, filter_params)
+        # Perform mixing
+        output_image = viewer.mix_images(mode, weights_a, weights_b, filter_params)
         img_base64 = viewer.image_to_base64(output_image)
         
         return JsonResponse({
@@ -176,11 +178,12 @@ def mix_images(request):
 def apply_adjustments(request):
     """
     Apply brightness and contrast adjustments to an image.
-    This treats the result as a new input image with recalculated FFT.
+    Supports both absolute (original) and relative (current) reference modes.
     POST params:
         - image_key: identifier
-        - brightness: adjustment value (-1 to 1)
-        - contrast: adjustment value (0.5 to 2)
+        - brightness: multiplier value (0.00 to 2.00, default 1.00)
+        - contrast: multiplier value (0.00 to 3.00, default 1.00)
+        - reference: 'original' (absolute) or 'current' (relative delta), default 'original'
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
@@ -188,14 +191,21 @@ def apply_adjustments(request):
     try:
         data = json.loads(request.body)
         image_key = data.get('image_key')
-        brightness = float(data.get('brightness', 0))
-        contrast = float(data.get('contrast', 1))
+        brightness = float(data.get('brightness', 1.0))
+        contrast = float(data.get('contrast', 1.0))
+        reference = data.get('reference', 'original')
         
         if not image_key:
             return JsonResponse({'error': 'Missing image_key'}, status=400)
         
+        # Validate reference mode
+        if reference not in ['original', 'current']:
+            return JsonResponse({'error': 'Invalid reference mode'}, status=400)
+        
         # Apply adjustments and recalculate FFT
-        adjusted_image, shape = viewer.apply_brightness_contrast(image_key, brightness, contrast)
+        adjusted_image, shape, applied_brightness, applied_contrast = viewer.apply_brightness_contrast(
+            image_key, brightness, contrast, reference
+        )
         
         # Convert to base64 for display
         adjusted_base64 = viewer.image_to_base64(adjusted_image)
@@ -204,7 +214,10 @@ def apply_adjustments(request):
             'success': True,
             'image_key': image_key,
             'adjusted_image': adjusted_base64,
-            'shape': shape
+            'shape': shape,
+            'applied_brightness': applied_brightness,
+            'applied_contrast': applied_contrast,
+            'reference': reference
         })
         
     except Exception as e:

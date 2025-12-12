@@ -1,0 +1,9 @@
+{
+    "name": "Tumor Ablation",
+    "geometry": "curved",
+    "num_elements": 16,
+    "element_spacing": 0.01,
+    "frequency": 1000000000.0,
+    "curvature": 1.5,
+    "steering_angle": 0.0
+}

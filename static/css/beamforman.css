@@ -17,10 +17,10 @@ body, html {
     background-color: var(--theme-bg);
     color: var(--text-primary);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    overflow: hidden; /* Prevent full page scroll */
+    overflow: hidden; /* Requirement: Compact, no scroll */
 }
 
-/* --- Layout Architecture --- */
+/* --- Layout --- */
 .app-container {
     display: flex;
     flex-direction: column;
@@ -36,13 +36,13 @@ body, html {
 
 .main-content {
     display: flex;
-    flex: 1; /* Fills remaining height */
+    flex: 1;
     overflow: hidden;
 }
 
-/* Control Pane (Left) */
+/* Split View: Left (Controls) */
 .control-pane {
-    width: 350px; /* Fixed width */
+    width: 350px;
     background-color: var(--theme-panel);
     border-right: 1px solid var(--theme-border);
     display: flex;
@@ -52,11 +52,11 @@ body, html {
 
 .panel-content {
     padding: 15px;
-    overflow-y: auto; /* Internal scrolling only */
+    overflow-y: auto; /* Internal scroll only */
     height: 100%;
 }
 
-/* Visualization Pane (Right) */
+/* Split View: Right (Visualizations) */
 .viz-pane {
     flex: 1;
     padding: 10px;
@@ -67,8 +67,8 @@ body, html {
 }
 
 .viz-container {
-    flex: 1; /* Splits height evenly (50/50) */
-    min-height: 0; /* Crucial for flex nested scrolling */
+    flex: 1; /* Equal height split */
+    min-height: 0;
 }
 
 /* --- Components --- */
@@ -88,7 +88,9 @@ body, html {
     text-transform: uppercase;
 }
 
-/* Sliders */
+.text-accent { color: var(--theme-accent); }
+
+/* Form Elements */
 .form-label-custom {
     color: var(--text-secondary);
     font-size: 0.8rem;
@@ -101,6 +103,20 @@ body, html {
     font-size: 0.85rem;
 }
 
+.form-control-custom {
+    background-color: var(--theme-bg);
+    border: 1px solid var(--theme-border);
+    color: var(--theme-accent);
+}
+
+.form-control-custom:focus {
+    background-color: var(--theme-bg);
+    border-color: var(--theme-accent);
+    box-shadow: none;
+    color: var(--theme-accent);
+}
+
+/* Range Input Styling */
 input[type=range] {
     -webkit-appearance: none;
     width: 100%;
@@ -123,18 +139,10 @@ input[type=range]::-webkit-slider-thumb {
     background: var(--theme-accent);
     margin-top: -5px;
     border: 2px solid var(--theme-bg);
-    transition: transform 0.1s;
 }
 
 input[type=range]::-webkit-slider-thumb:hover {
     transform: scale(1.2);
-}
-
-/* Frequency Sliders Specifics */
-.freq-row {
-    border-bottom: 1px solid rgba(255,255,255,0.05);
-    padding-bottom: 8px;
-    margin-bottom: 8px;
 }
 
 /* Buttons */
@@ -158,21 +166,29 @@ input[type=range]::-webkit-slider-thumb:hover {
 
 .btn-simulator-secondary:hover {
     background-color: rgba(255, 144, 0, 0.15);
-    color: var(--theme-accent);
 }
 
-/* Scrollbars */
+/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--theme-panel); }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #555; }
 
-.status-active {
+/* Status */
+.status-ready {
     width: 8px; height: 8px;
     border-radius: 50%;
-    background-color: var(--theme-accent);
-    box-shadow: 0 0 6px var(--theme-accent);
+    background-color: #00ff90;
+    box-shadow: 0 0 6px #00ff90;
 }
+
+/* Freq Row */
+.freq-row {
+    border-bottom: 1px solid #333;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+.monospace { font-family: monospace; }
 
 /* Plotly overrides */
 .js-plotly-plot .plotly .modebar {

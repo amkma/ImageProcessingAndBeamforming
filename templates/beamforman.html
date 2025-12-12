@@ -20,7 +20,7 @@
                     <h5 class="m-0 text-accent fw-bold">BEAMFORMING SIMULATOR</h5>
                 </div>
                 <div>
-                    <span class="text-secondary text-small me-3">Mode: <strong>Static / Synchronized</strong></span>
+                    <span class="text-secondary text-small me-3">Mode: <strong>Manual Positioning</strong></span>
                     <button class="btn btn-sm btn-simulator" id="exportBtn">
                         <i class="fas fa-camera me-1"></i> Snapshot
                     </button>
@@ -31,6 +31,7 @@
         <div class="main-content">
             <div class="control-pane">
                 <div class="panel-content">
+                    
                     <div class="mb-4">
                         <h6 class="text-secondary text-uppercase text-xs mb-2 fw-bold">Load Scenario</h6>
                         <div class="btn-group w-100">
@@ -41,24 +42,24 @@
                     </div>
 
                     <div class="card-custom mb-3">
-                        <div class="card-header-custom">Global Configuration</div>
+                        <div class="card-header-custom">Global Array Config</div>
                         <div class="card-body">
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between mb-1">
                                     <label class="form-label-custom">Count (N)</label>
-                                    <span class="slider-value" id="numElementsValue">10</span>
+                                    <span class="slider-value" id="numElementsValue">8</span>
                                 </div>
-                                <input type="range" class="form-range" id="numElements" min="2" max="32" value="10">
+                                <input type="range" class="form-range" id="numElements" min="2" max="32" value="8">
                             </div>
 
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between mb-1">
-                                    <label class="form-label-custom">Distance (m)</label>
-                                    <span class="slider-value" id="distanceValue">2.00</span>
+                                    <label class="form-label-custom">Spacing (m)</label>
+                                    <span class="slider-value" id="distanceValue">0.15</span>
                                 </div>
-                                <input type="range" class="form-range" id="distance" min="0.01" max="1.0" step="0.01" value="0.15">
+                                <input type="range" class="form-range" id="distance" min="0.001" max="1.0" step="0.001" value="0.15">
                             </div>
-
+                            
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between mb-1">
                                     <label class="form-label-custom">Delay (deg)</label>
@@ -66,31 +67,56 @@
                                 </div>
                                 <input type="range" class="form-range" id="delay" min="-180" max="180" step="1" value="0">
                             </div>
-                        </div>
-                    </div>
 
-                    <div class="card-custom mb-3">
-                        <div class="card-header-custom">Geometry</div>
-                        <div class="card-body">
                             <div class="mb-3">
-                                <label class="form-label-custom">Type</label>
+                                <div class="d-flex justify-content-between mb-1">
+                                    <label class="form-label-custom">Geometry</label>
+                                </div>
                                 <select class="form-select form-control-custom form-select-sm" id="geometry">
                                     <option value="Linear">Linear</option>
                                     <option value="Curved">Curved</option>
                                 </select>
                             </div>
+
                             <div class="mb-2" id="curvatureGroup" style="display:none;">
                                 <div class="d-flex justify-content-between mb-1">
                                     <label class="form-label-custom">Curvature</label>
                                     <span class="slider-value" id="curvatureValue">0.5</span>
                                 </div>
-                                <input type="range" class="form-range" id="curvature" min="0" max="2" step="0.1" value="0.5">
+                                <input type="range" class="form-range" id="curvature" min="0" max="5" step="0.1" value="0.5">
                             </div>
                         </div>
                     </div>
 
-                    <div class="card-custom flex-grow-1 d-flex flex-column" style="min-height: 200px;">
-                        <div class="card-header-custom">Antenna Frequencies (GHz)</div>
+                    <div class="card-custom mb-3" style="border: 1px solid var(--theme-accent);">
+                        <div class="card-header-custom text-accent">Individual Element Control</div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label-custom">Select Antenna:</label>
+                                <select class="form-select form-control-custom" id="antennaSelect">
+                                    </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <label class="form-label-custom">X Position (m)</label>
+                                    <span class="slider-value" id="antXValue">0.00</span>
+                                </div>
+                                <input type="range" class="form-range" id="antX" min="-10" max="10" step="0.01" value="0">
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <label class="form-label-custom">Y Position (m)</label>
+                                    <span class="slider-value" id="antYValue">0.00</span>
+                                </div>
+                                <input type="range" class="form-range" id="antY" min="0" max="20" step="0.01" value="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-custom flex-grow-1 d-flex flex-column" style="min-height: 250px;">
+                        <div class="card-header-custom">Frequencies (Hz)</div>
                         <div class="card-body p-2 scrollable-frequencies" id="freqContainer">
                             </div>
                     </div>
@@ -102,7 +128,7 @@
                     <div class="card-custom h-100 d-flex flex-column">
                         <div class="card-header-custom py-1 d-flex justify-content-between align-items-center">
                             <span><i class="fas fa-th me-2"></i>Field Intensity Heatmap</span>
-                            <select id="colormapSelect" class="form-select form-control-custom form-select-sm py-0" style="width: 100px; height: 24px; font-size: 0.8rem;">
+                            <select id="colormapSelect" class="form-select form-control-custom form-select-sm py-0" style="width: 100px;">
                                 <option value="Jet">Jet</option>
                                 <option value="Viridis">Viridis</option>
                                 <option value="Hot">Hot</option>

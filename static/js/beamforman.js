@@ -1,44 +1,44 @@
 /**
- * Beamforming Simulator - Plotly.js Implementation
- * Features:
- * - Logarithmic Heatmap (Waves Sum)
- * - Half-Circle Polar Plot (0-180 deg)
- * - Frequency Scaling
- * - Real-time animation
+ * Beamforming Simulator - Static Plotly Edition
+ * Synchronized with user input (No Animation loop)
  */
 
 class BeamformingSimulator {
     constructor() {
-        // Core Configuration (matches Python logic)
         this.config = {
             numAntennas: 10,
-            distance: 2.0,       // Distance between antennas (m)
-            delayDeg: 0,         // Phase delay (degrees)
-            speed: 343,          // Propagation speed (m/s) - Default to sound for demo, adjustable
-            frequencies: new Array(32).fill(99.99), // Individual antenna frequencies
-            geometry: 'Linear',  // 'Linear', 'Curved'
+            distance: 2.0,       // Spacing in meters
+            delayDeg: 0,
+            speed: 3e8,          // Speed of light
+            frequencies: new Array(32).fill(1e9), // Default 1GHz
+            geometry: 'Linear',
             curvature: 0.5,
-            gridSize: 150,       // Heatmap resolution
-            extent: 10           // Heatmap physical extent (-10 to 10)
+            gridSize: 150,       // Resolution
+            extent: 10           // +/- 10 meters
         };
 
-        this.isRunning = true;
-        this.time = 0;           // Animation time step
-        this.simSpeed = 0.5;     // Simulation speed factor
-
-        // DOM References
+        // DOM Elements
         this.heatmapDiv = document.getElementById('heatmapPlot');
         this.profileDiv = document.getElementById('beamProfilePlot');
 
+        // Initialize
         this.init();
     }
 
     init() {
         this.setupCoordinates();
         this.initPlots();
-        this.setupDynamicInputs(); // Generate frequency inputs
+        this.setupDynamicFreqSliders();
         this.attachEventListeners();
-        this.startLoop();
+
+        // Initial Calculation
+        this.updatePlots();
+
+        // Handle window resize for Plotly responsiveness
+        window.addEventListener('resize', () => {
+            Plotly.Plots.resize(this.heatmapDiv);
+            Plotly.Plots.resize(this.profileDiv);
+        });
     }
 
     setupCoordinates() {
@@ -49,7 +49,6 @@ class BeamformingSimulator {
         this.xGrid = new Float32Array(size);
         this.yGrid = new Float32Array(size);
 
-        // Linspace logic: x from -10 to 10, y from 0 to 20
         for(let i=0; i<size; i++) {
             this.xGrid[i] = -ext + (i / (size - 1)) * (2 * ext);
             this.yGrid[i] = 0 + (i / (size - 1)) * 20;
@@ -57,12 +56,11 @@ class BeamformingSimulator {
     }
 
     initPlots() {
-        // --- 1. Heatmap Layout ---
+        // --- Heatmap Setup ---
         const heatmapLayout = {
-            margin: { t: 30, b: 40, l: 50, r: 10 },
+            margin: { t: 10, b: 30, l: 40, r: 10 }, // Tight margins for compact view
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
-            title: { text: '', font: {color: '#fff'} },
             xaxis: {
                 title: 'Cross-Range (m)', color: '#ff9000',
                 showgrid: false, zeroline: false
@@ -71,42 +69,39 @@ class BeamformingSimulator {
                 title: 'Range (m)', color: '#ff9000',
                 showgrid: false, zeroline: false
             },
-            font: { family: 'Inter, sans-serif' }
+            font: { family: 'Inter, sans-serif', size: 11 }
         };
 
-        // Initialize with dummy data
         Plotly.newPlot(this.heatmapDiv, [{
             z: [[0]],
             type: 'heatmap',
             colorscale: 'Jet',
-            zmin: 0, zmax: 1,
+            zsmooth: 'best',
             colorbar: {
-                title: 'Intensity',
-                tickfont: {color: '#ff9000'},
-                titlefont: {color: '#ff9000'}
+                tickfont: {color: '#ff9000', size: 10},
+                thickness: 10
             }
         }], heatmapLayout, {responsive: true, displayModeBar: false});
 
-        // --- 2. Beam Profile Layout (Half Circle) ---
+        // --- Polar Setup ---
         const polarLayout = {
-            margin: { t: 30, b: 30, l: 40, r: 40 },
+            margin: { t: 20, b: 20, l: 30, r: 30 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
-            font: { color: '#ff9000', family: 'Inter, sans-serif' },
+            font: { color: '#ff9000', family: 'Inter, sans-serif', size: 11 },
             polar: {
                 bgcolor: 'rgba(255, 255, 255, 0.05)',
-                sector: [0, 180], // SHOW UPPER HALF ONLY
+                sector: [0, 180], // Half Circle
                 radialaxis: {
                     visible: true,
                     showticklabels: false,
-                    gridcolor: '#333'
+                    gridcolor: '#444'
                 },
                 angularaxis: {
-                    rotation: 0, // 0 degrees at 3 o'clock (standard math)
+                    rotation: 0,
                     direction: "counterclockwise",
-                    gridcolor: '#333',
+                    gridcolor: '#444',
                     tickcolor: '#ff9000',
-                    tickmode: 'array',
                     tickvals: [0, 45, 90, 135, 180],
                     ticktext: ['0°', '45°', '90°', '135°', '180°']
                 }
@@ -118,293 +113,248 @@ class BeamformingSimulator {
             mode: 'lines',
             fill: 'toself',
             r: [0], theta: [0],
-            line: { color: '#ff9000', width: 3, shape: 'spline' },
+            line: { color: '#ff9000', width: 2, shape: 'spline' },
             fillcolor: 'rgba(255, 144, 0, 0.2)'
         }], polarLayout, {responsive: true, displayModeBar: false});
     }
 
-    /**
-     * Calculate Antenna Positions (X, Y)
-     * Mirrors Python: self.y_positions calculations based on geometry
-     */
-    calculateAntennaPositions() {
-        const N = this.config.numAntennas;
-        const d = this.config.distance; // meters
+    setupDynamicFreqSliders() {
+        const container = document.getElementById('freqContainer');
+        container.innerHTML = ''; // Clear existing
 
-        // Use max freq to approximate wavelength for spacing logic if needed,
-        // or strictly follow python: dist_lambda = (1/distance_m) * wavelength?
-        // The python code says: distance_lambda = (1 / distance_m) * wavelength
-        // This implies spacing changes with frequency.
-        // For simulation stability, let's calculate positions in physical meters relative to spacing.
+        for (let i = 0; i < this.config.numAntennas; i++) {
+            const div = document.createElement('div');
+            div.className = 'freq-row';
 
-        const positions = [];
-        const totalWidth = (N - 1) * d;
+            // Convert current freq (Hz) to GHz for display
+            const freqGHz = (this.config.frequencies[i] / 1e9).toFixed(2);
 
-        for(let i=0; i<N; i++) {
-            // Centered around 0
-            const x = -totalWidth/2 + i * d;
-            let y = 0;
-
-            if(this.config.geometry === 'Curved') {
-                // Quadratic curve: y = 0.01*maxY + curvature * x^2
-                // Simplified for visualization scaling:
-                y = 0.5 + this.config.curvature * (x * x * 0.1);
-            }
-
-            positions.push({ x: x, y: y });
+            div.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small class="text-secondary">Antenna ${i+1}</small>
+                    <small class="text-accent monospace"><span id="freqVal${i}">${freqGHz}</span> GHz</small>
+                </div>
+                <input type="range" class="form-range freq-slider" 
+                       data-index="${i}" 
+                       min="0.1" max="5.0" step="0.05" 
+                       value="${freqGHz}">
+            `;
+            container.appendChild(div);
         }
-        return positions;
+
+        // Attach listeners to new sliders
+        document.querySelectorAll('.freq-slider').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const idx = parseInt(e.target.dataset.index);
+                const valGHz = parseFloat(e.target.value);
+
+                // Update Model
+                this.config.frequencies[idx] = valGHz * 1e9;
+
+                // Update Label
+                document.getElementById(`freqVal${idx}`).innerText = valGHz.toFixed(2);
+
+                // Trigger Calculation
+                this.updatePlots();
+            });
+        });
     }
 
     /**
-     * Physics Loop: Heatmap & Beam Profile
+     * Compute Physics logic (Heatmap Z & Polar R)
      */
     computePhysics() {
-        const antennas = this.calculateAntennaPositions();
         const N = this.config.numAntennas;
-        const frequencies = this.config.frequencies;
-        const maxFreq = Math.max(...frequencies.slice(0, N));
+        const d = this.config.distance;
         const delayRad = (this.config.delayDeg * Math.PI) / 180;
         const speed = this.config.speed;
+        const frequencies = this.config.frequencies;
+        const maxFreq = Math.max(...frequencies.slice(0, N));
 
-        // --- 1. HEATMAP CALCULATION (Logarithmic + Normalization) ---
+        // 1. Calculate Antenna Positions
+        const antennas = [];
+        const totalWidth = (N - 1) * d;
+        for(let i=0; i<N; i++) {
+            const x = -totalWidth/2 + i * d;
+            let y = 0;
+            if(this.config.geometry === 'Curved') {
+                y = 0.5 + this.config.curvature * (x * x * 0.1);
+            }
+            antennas.push({x, y});
+        }
+
+        // 2. Heatmap Calculation
         const size = this.config.gridSize;
-        const zData = []; // Rows
+        const zData = [];
+        let minZ = Infinity, maxZ = -Infinity;
 
-        // Time evolution factor
-        this.time += this.simSpeed;
-
-        for(let r=0; r<size; r++) { // y rows
+        for(let r=0; r<size; r++) { // Y axis
             const yPos = this.yGrid[r];
-            const rowData = [];
-
-            for(let c=0; c<size; c++) { // x cols
+            const row = [];
+            for(let c=0; c<size; c++) { // X axis
                 const xPos = this.xGrid[c];
                 let waveSum = 0;
 
                 for(let i=0; i<N; i++) {
                     const ant = antennas[i];
                     const freq = frequencies[i];
-                    const wavelength = speed / freq;
-                    const k = 2 * Math.PI / wavelength;
+                    const k = (2 * Math.PI * freq) / speed;
 
-                    // Distance
                     const R = Math.sqrt((xPos - ant.x)**2 + (yPos - ant.y)**2);
+                    const phase = -i * delayRad;
+                    const scale = freq / maxFreq;
 
-                    // Phase Delay: -i * delay_rad
-                    const phaseDelay = -i * delayRad;
-
-                    // Frequency Scaling
-                    const freqScale = freq / maxFreq;
-
-                    // Wave calculation with time component: sin(kR + phase - wt)
-                    // Adding time makes the waves move visually
-                    waveSum += freqScale * Math.sin(k * R + phaseDelay - this.time);
+                    // Static Wave Equation (No time 't')
+                    waveSum += scale * Math.sin(k * R + phase);
                 }
 
-                // Logarithmic Scaling: log1p(abs(sum))
-                let val = Math.log1p(Math.abs(waveSum));
-                rowData.push(val);
+                // Log intensity
+                const val = Math.log1p(Math.abs(waveSum));
+                if(val < minZ) minZ = val;
+                if(val > maxZ) maxZ = val;
+                row.push(val);
             }
-            zData.push(rowData);
+            zData.push(row);
         }
 
-        // Normalize Z Data to 0-1
-        let minZ = Infinity, maxZ = -Infinity;
-        for(let r=0; r<size; r++) {
-            for(let c=0; c<size; c++) {
-                if(zData[r][c] < minZ) minZ = zData[r][c];
-                if(zData[r][c] > maxZ) maxZ = zData[r][c];
-            }
-        }
+        // Normalize Heatmap 0-1
         const range = maxZ - minZ || 1;
         const normZ = zData.map(row => row.map(v => (v - minZ) / range));
 
-
-        // --- 2. BEAM PROFILE CALCULATION (Polar 0-180) ---
-        const beamAngles = []; // Theta
-        const beamMags = [];   // R
-        const numPoints = 180; // 1 degree steps
-
-        for(let angleIdx = 0; angleIdx <= numPoints; angleIdx++) {
-            const deg = angleIdx; // 0 to 180
-            const azimuthRad = (deg * Math.PI) / 180; // Theta
-
-            let realSum = 0;
-            let imagSum = 0;
+        // 3. Beam Profile Calculation
+        const beamAngles = [];
+        const beamMags = [];
+        for(let deg=0; deg<=180; deg++) {
+            const az = (deg * Math.PI) / 180;
+            let real = 0, imag = 0;
 
             for(let i=0; i<N; i++) {
                 const ant = antennas[i];
                 const freq = frequencies[i];
-                const wavelength = speed / freq;
-                const k = 2 * Math.PI / wavelength;
+                const k = (2 * Math.PI * freq) / speed;
 
-                // Polar conversion of antenna pos
                 const r_ant = Math.sqrt(ant.x**2 + ant.y**2);
                 const theta_ant = Math.atan2(ant.y, ant.x);
-
                 const phase_i = -i * delayRad;
 
-                // Phase Term: -k * (f_i/f_max) * r * cos(azimuth - theta_ant) + phase
-                // Note: Python used f_i / f_max scaling inside the phase term
-                const phaseTerm = -k * (freq/maxFreq) * r_ant * Math.cos(azimuthRad - theta_ant) + phase_i;
+                const term = -k * (freq/maxFreq) * r_ant * Math.cos(az - theta_ant) + phase_i;
 
-                realSum += Math.cos(phaseTerm);
-                imagSum += Math.sin(phaseTerm);
+                real += Math.cos(term);
+                imag += Math.sin(term);
             }
-
-            const magnitude = Math.sqrt(realSum**2 + imagSum**2);
-
             beamAngles.push(deg);
-            beamMags.push(magnitude);
+            beamMags.push(Math.sqrt(real**2 + imag**2));
         }
 
-        // Normalize Beam Profile (Optional, for better visual fit)
         const maxBeam = Math.max(...beamMags) || 1;
         const normBeam = beamMags.map(m => m / maxBeam);
 
-        return { z: normZ, beamTheta: beamAngles, beamR: normBeam };
+        return { z: normZ, theta: beamAngles, r: normBeam };
     }
 
-    startLoop() {
-        const update = () => {
-            if(!this.isRunning) {
-                requestAnimationFrame(update);
-                return;
+    updatePlots() {
+        const data = this.computePhysics();
+
+        // Update Heatmap
+        Plotly.react(this.heatmapDiv, [{
+            z: data.z,
+            type: 'heatmap',
+            colorscale: document.getElementById('colormapSelect').value,
+            zsmooth: 'best',
+            showscale: true,
+            colorbar: {
+                tickfont: {color: '#ff9000'},
+                thickness: 10
             }
+        }], this.heatmapDiv.layout);
 
-            const data = this.computePhysics();
-
-            // Efficient Plotly Updates
-            Plotly.react(this.heatmapDiv, [{
-                z: data.z,
-                type: 'heatmap',
-                colorscale: document.getElementById('colormapSelect').value,
-                zsmooth: 'best',
-                showscale: true,
-                colorbar: {
-                    title: 'Intensity',
-                    tickcolor: '#ff9000',
-                    tickfont: {color: '#ff9000'},
-                    titlefont: {color: '#ff9000'}
-                }
-            }], this.heatmapDiv.layout);
-
-            Plotly.react(this.profileDiv, [{
-                type: 'scatterpolar',
-                mode: 'lines',
-                fill: 'toself',
-                r: data.beamR,
-                theta: data.beamTheta,
-                line: { color: '#ff9000', width: 3, shape: 'spline' },
-                fillcolor: 'rgba(255, 144, 0, 0.2)'
-            }], this.profileDiv.layout);
-
-            requestAnimationFrame(update);
-        };
-        requestAnimationFrame(update);
-    }
-
-    // --- UI Logic ---
-
-    setupDynamicInputs() {
-        const container = document.getElementById('freqContainer');
-        container.innerHTML = '';
-
-        for(let i=0; i<this.config.numAntennas; i++) {
-            const div = document.createElement('div');
-            div.className = 'd-flex align-items-center mb-2';
-            div.innerHTML = `
-                <small class="text-secondary me-2" style="width: 80px">Antenna ${i+1}</small>
-                <input type="number" class="form-control form-control-custom form-control-sm freq-input" 
-                       data-index="${i}" value="${this.config.frequencies[i]}">
-            `;
-            container.appendChild(div);
-        }
-
-        // Attach listeners to new inputs
-        document.querySelectorAll('.freq-input').forEach(input => {
-            input.addEventListener('change', (e) => {
-                const idx = parseInt(e.target.dataset.index);
-                this.config.frequencies[idx] = parseFloat(e.target.value);
-            });
-        });
+        // Update Polar
+        Plotly.react(this.profileDiv, [{
+            type: 'scatterpolar',
+            mode: 'lines',
+            r: data.r,
+            theta: data.theta,
+            fill: 'toself',
+            fillcolor: 'rgba(255, 144, 0, 0.2)',
+            line: { color: '#ff9000', width: 2 }
+        }], this.profileDiv.layout);
     }
 
     attachEventListeners() {
-        // Sliders
-        const bindSlider = (id, key, isFloat=false) => {
+        // Helper to bind sliders
+        const bind = (id, key, isFloat=false) => {
             const el = document.getElementById(id);
             const disp = document.getElementById(id + 'Value');
             el.addEventListener('input', (e) => {
-                let val = isFloat ? parseFloat(e.target.value) : parseInt(e.target.value);
+                const val = isFloat ? parseFloat(e.target.value) : parseInt(e.target.value);
                 this.config[key] = val;
                 if(disp) disp.innerText = val + (id === 'delay' ? '°' : '');
 
-                // Specific updates
-                if(id === 'numElements') this.setupDynamicInputs();
+                if(id === 'numElements') {
+                    this.setupDynamicFreqSliders();
+                }
+
+                // Trigger update
+                this.updatePlots();
             });
         };
 
-        bindSlider('numElements', 'numAntennas');
-        bindSlider('distance', 'distance', true);
-        bindSlider('delay', 'delayDeg');
-        bindSlider('curvature', 'curvature', true);
-        bindSlider('simSpeed', 'simSpeed', true); // Visual speed only
+        bind('numElements', 'numAntennas');
+        bind('distance', 'distance', true);
+        bind('delay', 'delayDeg');
+        bind('curvature', 'curvature', true);
 
-        // Selects
+        // Dropdowns
         document.getElementById('geometry').addEventListener('change', (e) => {
             this.config.geometry = e.target.value;
             document.getElementById('curvatureGroup').style.display =
                 (e.target.value === 'Curved') ? 'block' : 'none';
+            this.updatePlots();
         });
 
-        // Speed adjustment logic
-        document.getElementById('simSpeed').addEventListener('input', (e) => {
-            this.simSpeed = parseInt(e.target.value) / 100;
-        });
-
-        // Play/Pause
-        document.getElementById('playPauseBtn').addEventListener('click', () => {
-            this.isRunning = !this.isRunning;
-            const icon = document.querySelector('#playPauseBtn i');
-            icon.className = this.isRunning ? 'fas fa-pause' : 'fas fa-play';
-        });
-
-        // Window Resize
-        window.addEventListener('resize', () => {
-            Plotly.Plots.resize(this.heatmapDiv);
-            Plotly.Plots.resize(this.profileDiv);
+        document.getElementById('colormapSelect').addEventListener('change', () => {
+            this.updatePlots();
         });
     }
 
     loadScenario(type) {
         if(type === '5g') {
-            this.updateControl('numElements', 8);
-            this.updateControl('distance', 0.5);
+            this.setControl('numElements', 8);
+            this.setControl('distance', 0.5);
             this.config.geometry = 'Linear';
-            this.updateControl('delay', 30);
+            this.setControl('delay', 30);
         } else if (type === 'tumor') {
-            this.updateControl('numElements', 16);
-            this.updateControl('distance', 0.1);
+            this.setControl('numElements', 16);
+            this.setControl('distance', 0.1);
             this.config.geometry = 'Curved';
-            this.updateControl('curvature', 1.5);
+            this.setControl('curvature', 1.5);
+        } else if (type === 'ultrasound') {
+            this.setControl('numElements', 32);
+            this.setControl('distance', 0.05);
+            this.config.geometry = 'Linear';
+            this.setControl('delay', 0);
         }
 
-        // Reflect geometry in UI
+        // Update UI state
         document.getElementById('geometry').value = this.config.geometry;
         document.getElementById('curvatureGroup').style.display =
             (this.config.geometry === 'Curved') ? 'block' : 'none';
+
+        this.setupDynamicFreqSliders();
+        this.updatePlots();
     }
 
-    updateControl(id, value) {
+    setControl(id, value) {
         const el = document.getElementById(id);
         el.value = value;
-        el.dispatchEvent(new Event('input'));
+        // Update the display text manually since we are bypassing the input event
+        const disp = document.getElementById(id + 'Value');
+        if(disp) disp.innerText = value + (id === 'delay' ? '°' : '');
+        this.config[id === 'numElements' ? 'numAntennas' : (id === 'delay' ? 'delayDeg' : id)] = value;
     }
 }
 
-// Boot
+// Start Application
 document.addEventListener('DOMContentLoaded', () => {
     window.simulator = new BeamformingSimulator();
 });

@@ -12,149 +12,122 @@
     <link rel="stylesheet" href="{% static 'css/beamforman.css' %}">
 </head>
 <body>
-    <section class="simulator-container">
-        <div class="container-fluid">
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card-custom p-3">
-                        <div class="row align-items-center">
-                            <div class="col-md-4">
-                                <div class="d-flex align-items-center">
-                                    <div class="status-indicator status-active me-2" id="simStatus"></div>
-                                    <h5 class="m-0 text-accent">BEAMFORMING SIMULATOR</h5>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="d-flex align-items-center justify-content-between px-4 py-2">
+                <div class="d-flex align-items-center">
+                    <div class="status-indicator status-ready me-2" id="simStatus"></div>
+                    <h5 class="m-0 text-accent fw-bold">BEAMFORMING SIMULATOR</h5>
+                </div>
+                <div>
+                    <span class="text-secondary text-small me-3">Mode: <strong>Static / Synchronized</strong></span>
+                    <button class="btn btn-sm btn-simulator" id="exportBtn">
+                        <i class="fas fa-camera me-1"></i> Snapshot
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <div class="control-pane">
+                <div class="panel-content">
+                    <div class="mb-4">
+                        <h6 class="text-secondary text-uppercase text-xs mb-2 fw-bold">Load Scenario</h6>
+                        <div class="btn-group w-100">
+                            <button class="btn btn-simulator-secondary btn-sm" onclick="window.simulator.loadScenario('5g')">5G</button>
+                            <button class="btn btn-simulator-secondary btn-sm" onclick="window.simulator.loadScenario('tumor')">Tumor</button>
+                            <button class="btn btn-simulator-secondary btn-sm" onclick="window.simulator.loadScenario('ultrasound')">Ultrasound</button>
+                        </div>
+                    </div>
+
+                    <div class="card-custom mb-3">
+                        <div class="card-header-custom">Global Configuration</div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <label class="form-label-custom">Count (N)</label>
+                                    <span class="slider-value" id="numElementsValue">10</span>
                                 </div>
+                                <input type="range" class="form-range" id="numElements" min="2" max="32" value="10">
                             </div>
-                            <div class="col-md-8 text-end">
-                                <div class="d-inline-flex gap-3 align-items-center">
-                                    <span class="text-secondary">Engine: <strong class="text-white">Plotly.js</strong></span>
-                                    <button class="btn btn-simulator btn-sm" id="exportBtn">
-                                        <i class="fas fa-camera me-1"></i> Snapshot
-                                    </button>
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <label class="form-label-custom">Distance (m)</label>
+                                    <span class="slider-value" id="distanceValue">2.00</span>
                                 </div>
+                                <input type="range" class="form-range" id="distance" min="0.01" max="1.0" step="0.01" value="0.15">
+                            </div>
+
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <label class="form-label-custom">Delay (deg)</label>
+                                    <span class="slider-value" id="delayValue">0°</span>
+                                </div>
+                                <input type="range" class="form-range" id="delay" min="-180" max="180" step="1" value="0">
                             </div>
                         </div>
+                    </div>
+
+                    <div class="card-custom mb-3">
+                        <div class="card-header-custom">Geometry</div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label-custom">Type</label>
+                                <select class="form-select form-control-custom form-select-sm" id="geometry">
+                                    <option value="Linear">Linear</option>
+                                    <option value="Curved">Curved</option>
+                                </select>
+                            </div>
+                            <div class="mb-2" id="curvatureGroup" style="display:none;">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <label class="form-label-custom">Curvature</label>
+                                    <span class="slider-value" id="curvatureValue">0.5</span>
+                                </div>
+                                <input type="range" class="form-range" id="curvature" min="0" max="2" step="0.1" value="0.5">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-custom flex-grow-1 d-flex flex-column" style="min-height: 200px;">
+                        <div class="card-header-custom">Antenna Frequencies (GHz)</div>
+                        <div class="card-body p-2 scrollable-frequencies" id="freqContainer">
+                            </div>
                     </div>
                 </div>
             </div>
 
-            <div class="row g-4">
-                <div class="col-lg-4">
-                    <div class="control-panel">
-                        <div class="mb-4">
-                            <h6 class="text-secondary text-uppercase mb-2">Scenarios</h6>
-                            <div class="btn-group w-100">
-                                <button class="btn btn-simulator-secondary" onclick="window.simulator.loadScenario('5g')">5G</button>
-                                <button class="btn btn-simulator-secondary" onclick="window.simulator.loadScenario('tumor')">Tumor</button>
-                                <button class="btn btn-simulator-secondary" onclick="window.simulator.loadScenario('ultrasound')">Ultrasound</button>
-                            </div>
+            <div class="viz-pane">
+                <div class="viz-container mb-2">
+                    <div class="card-custom h-100 d-flex flex-column">
+                        <div class="card-header-custom py-1 d-flex justify-content-between align-items-center">
+                            <span><i class="fas fa-th me-2"></i>Field Intensity Heatmap</span>
+                            <select id="colormapSelect" class="form-select form-control-custom form-select-sm py-0" style="width: 100px; height: 24px; font-size: 0.8rem;">
+                                <option value="Jet">Jet</option>
+                                <option value="Viridis">Viridis</option>
+                                <option value="Hot">Hot</option>
+                                <option value="Electric">Electric</option>
+                            </select>
                         </div>
-
-                        <div class="card-custom mb-3">
-                            <div class="card-header-custom">Antenna Configuration</div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <label class="form-label-custom">Number of Antennas</label>
-                                    <div class="d-flex align-items-center">
-                                        <input type="range" class="form-range" id="numElements" min="2" max="32" value="10">
-                                        <span class="slider-value" id="numElementsValue">10</span>
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label-custom">Distance (m)</label>
-                                    <div class="d-flex align-items-center">
-                                        <input type="range" class="form-range" id="distance" min="0.01" max="5.0" step="0.01" value="2.0">
-                                        <span class="slider-value" id="distanceValue">2.00</span>
-                                    </div>
-                                </div>
-
-                                <div class="mb-3">
-                                    <label class="form-label-custom">Delay (degrees)</label>
-                                    <div class="d-flex align-items-center">
-                                        <input type="range" class="form-range" id="delay" min="-180" max="180" step="1" value="0">
-                                        <span class="slider-value" id="delayValue">0°</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card-custom mb-3">
-                            <div class="card-header-custom">Geometry</div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <label class="form-label-custom">Array Geometry</label>
-                                    <select class="form-select form-control-custom" id="geometry">
-                                        <option value="Linear">Linear</option>
-                                        <option value="Curved">Curved</option>
-                                    </select>
-                                </div>
-                                <div class="mb-3" id="curvatureGroup" style="display:none;">
-                                    <label class="form-label-custom">Curvature</label>
-                                    <div class="d-flex align-items-center">
-                                        <input type="range" class="form-range" id="curvature" min="0" max="2" step="0.1" value="0.5">
-                                        <span class="slider-value" id="curvatureValue">0.5</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card-custom">
-                            <div class="card-header-custom">Frequencies (Hz)</div>
-                            <div class="card-body scrollable-frequencies" id="freqContainer" style="max-height: 200px; overflow-y: auto;">
-                                </div>
+                        <div class="card-body p-0 flex-grow-1 position-relative">
+                            <div id="heatmapPlot" style="width: 100%; height: 100%;"></div>
                         </div>
                     </div>
                 </div>
 
-                <div class="col-lg-8">
-                    <div class="visualization-area">
-                        <div class="viz-toolbar card-custom mb-3 p-2 d-flex align-items-center gap-3">
-                            <button class="btn btn-simulator btn-sm icon-btn" id="playPauseBtn">
-                                <i class="fas fa-pause"></i>
-                            </button>
-                            <div class="d-flex align-items-center gap-2 flex-grow-1">
-                                <span class="text-small text-secondary">Speed</span>
-                                <input type="range" class="form-range" id="simSpeed" min="0" max="100" value="20">
-                            </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <span class="text-small text-secondary">Colormap</span>
-                                <select class="form-select form-control-custom form-select-sm" id="colormapSelect" style="width: 120px;">
-                                    <option value="Jet">Jet</option>
-                                    <option value="Viridis">Viridis</option>
-                                    <option value="Hot">Hot</option>
-                                    <option value="Electric">Electric</option>
-                                </select>
-                            </div>
+                <div class="viz-container">
+                    <div class="card-custom h-100 d-flex flex-column">
+                        <div class="card-header-custom py-1">
+                            <span><i class="fas fa-wifi me-2"></i>Beam Profile (Upper Hemisphere)</span>
                         </div>
-
-                        <div class="row g-3">
-                            <div class="col-12">
-                                <div class="card-custom">
-                                    <div class="card-header-custom">
-                                        <span><i class="fas fa-th me-2"></i>Field Intensity Heatmap</span>
-                                    </div>
-                                    <div class="card-body p-0">
-                                        <div id="heatmapPlot" style="width: 100%; height: 450px;"></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-12">
-                                <div class="card-custom">
-                                    <div class="card-header-custom">
-                                        <span><i class="fas fa-wifi me-2"></i>Beam Profile (0° - 180°)</span>
-                                    </div>
-                                    <div class="card-body p-0">
-                                        <div id="beamProfilePlot" style="width: 100%; height: 400px;"></div>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="card-body p-0 flex-grow-1 position-relative">
+                            <div id="beamProfilePlot" style="width: 100%; height: 100%;"></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
 
     <script src="{% static 'js/beamforman.js' %}"></script>
 </body>

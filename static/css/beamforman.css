@@ -9,67 +9,102 @@
     --text-secondary: #aaaaaa;
 }
 
-body {
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
     background-color: var(--theme-bg);
     color: var(--text-primary);
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    overflow: hidden; /* Prevent full page scroll */
 }
 
-/* Layout */
-.simulator-container { padding: 20px; }
-.control-panel, .visualization-area {
+/* --- Layout Architecture --- */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.app-header {
+    height: 50px;
     background-color: var(--theme-panel);
-    border: 1px solid var(--theme-border);
-    border-radius: 8px;
-    padding: 20px;
+    border-bottom: 1px solid var(--theme-border);
+    flex-shrink: 0;
+}
+
+.main-content {
+    display: flex;
+    flex: 1; /* Fills remaining height */
+    overflow: hidden;
+}
+
+/* Control Pane (Left) */
+.control-pane {
+    width: 350px; /* Fixed width */
+    background-color: var(--theme-panel);
+    border-right: 1px solid var(--theme-border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+}
+
+.panel-content {
+    padding: 15px;
+    overflow-y: auto; /* Internal scrolling only */
     height: 100%;
 }
 
-/* Cards */
+/* Visualization Pane (Right) */
+.viz-pane {
+    flex: 1;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--theme-bg);
+    gap: 10px;
+}
+
+.viz-container {
+    flex: 1; /* Splits height evenly (50/50) */
+    min-height: 0; /* Crucial for flex nested scrolling */
+}
+
+/* --- Components --- */
 .card-custom {
     background-color: var(--theme-card);
     border: 1px solid var(--theme-border);
-    border-radius: 6px;
-    overflow: hidden;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    border-radius: 4px;
 }
 
 .card-header-custom {
     background-color: rgba(255, 144, 0, 0.1);
     border-bottom: 1px solid var(--theme-border);
-    padding: 10px 15px;
+    padding: 8px 12px;
     font-weight: 600;
     color: var(--theme-accent);
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     text-transform: uppercase;
 }
 
-/* Inputs */
+/* Sliders */
 .form-label-custom {
     color: var(--text-secondary);
+    font-size: 0.8rem;
+    margin-bottom: 0;
+}
+
+.slider-value {
+    font-family: monospace;
+    color: var(--theme-accent);
     font-size: 0.85rem;
-    margin-bottom: 5px;
 }
 
-.form-control-custom {
-    background-color: var(--theme-bg);
-    border: 1px solid var(--theme-border);
-    color: var(--theme-accent);
-}
-
-.form-control-custom:focus {
-    background-color: var(--theme-bg);
-    border-color: var(--theme-accent);
-    box-shadow: none;
-    color: var(--theme-accent);
-}
-
-/* Sliders */
 input[type=range] {
     -webkit-appearance: none;
     width: 100%;
     background: transparent;
-    height: 6px;
     cursor: pointer;
 }
 
@@ -82,11 +117,11 @@ input[type=range]::-webkit-slider-runnable-track {
 
 input[type=range]::-webkit-slider-thumb {
     -webkit-appearance: none;
-    height: 16px;
-    width: 16px;
+    height: 14px;
+    width: 14px;
     border-radius: 50%;
     background: var(--theme-accent);
-    margin-top: -6px;
+    margin-top: -5px;
     border: 2px solid var(--theme-bg);
     transition: transform 0.1s;
 }
@@ -95,20 +130,18 @@ input[type=range]::-webkit-slider-thumb:hover {
     transform: scale(1.2);
 }
 
-.slider-value {
-    font-family: monospace;
-    color: var(--theme-accent);
-    margin-left: 10px;
-    min-width: 50px;
-    text-align: right;
-    font-size: 0.9rem;
+/* Frequency Sliders Specifics */
+.freq-row {
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding-bottom: 8px;
+    margin-bottom: 8px;
 }
 
 /* Buttons */
 .btn-simulator {
     background-color: var(--theme-accent);
     color: #000;
-    font-weight: 700;
+    font-weight: 600;
     border: none;
 }
 
@@ -121,8 +154,6 @@ input[type=range]::-webkit-slider-thumb:hover {
     background-color: transparent;
     border: 1px solid var(--theme-accent);
     color: var(--theme-accent);
-    margin-right: 5px;
-    transition: all 0.2s;
 }
 
 .btn-simulator-secondary:hover {
@@ -130,46 +161,21 @@ input[type=range]::-webkit-slider-thumb:hover {
     color: var(--theme-accent);
 }
 
-.icon-btn {
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
+/* Scrollbars */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--theme-panel); }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
 
-/* Text & Misc */
-.text-accent { color: var(--theme-accent); }
-.text-small { font-size: 0.8rem; }
-
-.status-indicator {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background-color: #444;
-}
 .status-active {
+    width: 8px; height: 8px;
+    border-radius: 50%;
     background-color: var(--theme-accent);
-    box-shadow: 0 0 8px var(--theme-accent);
-    animation: pulse 2s infinite;
+    box-shadow: 0 0 6px var(--theme-accent);
 }
 
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-
-/* Scrollbar for frequency list */
-.scrollable-frequencies::-webkit-scrollbar {
-    width: 6px;
-}
-.scrollable-frequencies::-webkit-scrollbar-track {
-    background: var(--theme-bg);
-}
-.scrollable-frequencies::-webkit-scrollbar-thumb {
-    background: var(--theme-border);
-    border-radius: 3px;
+/* Plotly overrides */
+.js-plotly-plot .plotly .modebar {
+    left: 50%;
+    transform: translateX(-50%);
 }

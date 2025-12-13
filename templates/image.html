@@ -8,9 +8,7 @@
 </head>
 <body>
     <div class="split-container">
-        <!-- Left Panel: Viewports -->
         <div class="left-panel">
-            <!-- Input Viewports -->
             <div class="viewport-grid">
                 <div class="viewport-container">
                     <div class="viewport-label">IMAGE 1</div>
@@ -42,7 +40,6 @@
                 </div>
             </div>
 
-            <!-- Component Viewports with Dropdowns -->
             <div class="viewport-grid">
                 <div class="viewport-with-controls">
                     <select id="component-select-1" class="component-select">
@@ -122,7 +119,6 @@
                 </div>
             </div>
 
-            <!-- Output Viewports -->
             <div class="output-section">
                 <div class="viewport-container output-container">
                     <div class="viewport-label">OUTPUT 1</div>
@@ -139,11 +135,9 @@
             </div>
         </div>
 
-        <!-- Right Panel: Controls -->
         <div class="right-panel">
             <h3 class="panel-title">Control Dashboard</h3>
             
-            <!-- Image 1 Controls -->
             <div class="control-group">
                 <h4 class="control-title">Image 1</h4>
                 <select id="mode-select-1" class="mode-select">
@@ -160,7 +154,6 @@
                 </div>
             </div>
 
-            <!-- Image 2 Controls -->
             <div class="control-group">
                 <h4 class="control-title">Image 2</h4>
                 <select id="mode-select-2" class="mode-select">
@@ -177,7 +170,6 @@
                 </div>
             </div>
 
-            <!-- Image 3 Controls -->
             <div class="control-group">
                 <h4 class="control-title">Image 3</h4>
                 <select id="mode-select-3" class="mode-select">
@@ -194,7 +186,6 @@
                 </div>
             </div>
 
-            <!-- Image 4 Controls -->
             <div class="control-group">
                 <h4 class="control-title">Image 4</h4>
                 <select id="mode-select-4" class="mode-select">
@@ -211,7 +202,6 @@
                 </div>
             </div>
 
-            <!-- Filter Controls -->
             <div class="control-group">
                 <h4 class="control-title">Frequency Filter</h4>
                 <div class="filter-controls">
@@ -229,17 +219,15 @@
         </div>
     </div>
     
-    <!-- Status Indicator -->
     <div class="status-indicator" id="status-indicator">
         <span id="status-text"></span>
     </div>
     
-    <!-- Adjustment Indicator -->
     <div class="adjustment-indicator" id="adjustment-indicator">
         <div class="adjustment-value">Brightness: <span id="adj-brightness">1.00</span></div>
         <div class="adjustment-value">Contrast: <span id="adj-contrast">1.00</span></div>
     </div>
 
-    <script src="/static/js/main.js"></script>
+    <script src="/static/js/image.js"></script>
 </body>
 </html>

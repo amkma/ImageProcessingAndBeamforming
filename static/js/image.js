@@ -1022,5 +1022,3 @@ function updateFilterMode() {
         overlay.className = `filter-overlay ${state.filter.mode}-mode`;
     }
 }
-
-

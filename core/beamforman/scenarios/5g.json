@@ -1,9 +1,9 @@
 {
-    "name": "5G Beam Steering",
+    "name": "5G Beamforming",
     "geometry": "linear",
-    "num_elements": 8,
-    "element_spacing": 0.04,
-    "frequency": 3500000000.0,
-    "steering_angle": 30.0,
+    "num_elements": 4,
+    "element_spacing": 1,
+    "frequency": 2500000000.0,
+    "steering_angle": 180.0,
     "curvature": 0.0
 }

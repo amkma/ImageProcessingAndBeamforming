@@ -17,7 +17,7 @@ body, html {
     background-color: var(--theme-bg);
     color: var(--text-primary);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    overflow: hidden; /* Requirement: Compact, no scroll */
+    overflow: hidden;
 }
 
 /* --- Layout --- */
@@ -52,7 +52,7 @@ body, html {
 
 .panel-content {
     padding: 15px;
-    overflow-y: auto; /* Internal scroll only */
+    overflow-y: auto;
     height: 100%;
 }
 
@@ -67,7 +67,7 @@ body, html {
 }
 
 .viz-container {
-    flex: 1; /* Equal height split */
+    flex: 1;
     min-height: 0;
 }
 
@@ -168,12 +168,60 @@ input[type=range]::-webkit-slider-thumb:hover {
     background-color: rgba(255, 144, 0, 0.15);
 }
 
-/* ACTIVE SCENARIO BUTTON STYLING */
+/* FIXED: Active Scenario Button Styling */
+.scenario-btn {
+    position: relative;
+    transition: all 0.3s ease;
+}
+
 .scenario-btn.active {
-    background-color: #cc7400 !important;
-    color: #ffffff !important;
-    border-color: #cc7400 !important;
+    background-color: var(--theme-accent) !important;
+    color: #000000 !important;
+    border-color: var(--theme-accent) !important;
     font-weight: 700;
+    box-shadow: 0 0 15px rgba(255, 144, 0, 0.5);
+}
+
+.scenario-btn.active::after {
+    content: '●';
+    position: absolute;
+    top: 2px;
+    right: 5px;
+    font-size: 0.6rem;
+    color: #00ff90;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(1.2);
+    }
+}
+
+/* FIXED: Mode Indicator Styling */
+.mode-indicator {
+    padding: 6px 15px;
+    background-color: rgba(255, 144, 0, 0.1);
+    border: 1px solid var(--theme-border);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mode-indicator .text-small {
+    font-size: 0.75rem;
+}
+
+.mode-indicator strong {
+    font-size: 0.9rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
 }
 
 /* Scrollbar */
@@ -184,10 +232,21 @@ input[type=range]::-webkit-slider-thumb:hover {
 
 /* Status */
 .status-ready {
-    width: 8px; height: 8px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background-color: #00ff90;
     box-shadow: 0 0 6px #00ff90;
+    animation: statusPulse 2s infinite;
+}
+
+@keyframes statusPulse {
+    0%, 100% {
+        box-shadow: 0 0 6px #00ff90;
+    }
+    50% {
+        box-shadow: 0 0 12px #00ff90;
+    }
 }
 
 /* Freq Row */
@@ -202,4 +261,63 @@ input[type=range]::-webkit-slider-thumb:hover {
 .js-plotly-plot .plotly .modebar {
     left: 50%;
     transform: translateX(-50%);
+}
+
+/* Scrollable Frequencies Container */
+.scrollable-frequencies {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.scrollable-frequencies::-webkit-scrollbar {
+    width: 6px;
+}
+
+.scrollable-frequencies::-webkit-scrollbar-track {
+    background: var(--theme-bg);
+}
+
+.scrollable-frequencies::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 3px;
+}
+
+.scrollable-frequencies::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Info Icon Styling */
+.fa-info-circle {
+    cursor: help;
+    transition: color 0.3s;
+}
+
+.fa-info-circle:hover {
+    color: var(--theme-accent) !important;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .control-pane {
+        width: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        flex-direction: column;
+    }
+
+    .control-pane {
+        width: 100%;
+        height: 300px;
+    }
+
+    .viz-pane {
+        height: calc(100vh - 350px);
+    }
+
+    .mode-indicator {
+        display: none;
+    }
 }

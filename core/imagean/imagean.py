@@ -163,94 +163,101 @@ class ImageViewer:
     
     def mix_images(self, modes, weights_a, weights_b, filter_params=None):
         """
-        Mix FFTs using dual-component weighting with per-image mode selection.
-        Each image can use either magnitude_phase or real_imaginary mode independently.
-        
-        Args:
-            modes: dict {image_key: mode} where mode is 'magnitude_phase' or 'real_imaginary'
-            weights_a: dict {image_key: weight} for component A (magnitude or real)
-            weights_b: dict {image_key: weight} for component B (phase or imaginary)
-            filter_params: dict with 'mode' ('inner'/'outer') and 'rect'
-                
-        Returns:
-            numpy.ndarray: Mixed output image (uint8)
+        Core logic to mix images in frequency domain.
+        'weights_a' controls Component 1 (Magnitude or Real).
+        'weights_b' controls Component 2 (Phase or Imaginary).
         """
-        if len(self.images) == 0:
-            raise ValueError("No images loaded")
         
-        ref_shape = next(iter(self.images.values())).shape
-        
-        # Filter mask
-        frequency_mask = None
-        if filter_params and filter_params.get('rect'):
-            frequency_mask = self._create_frequency_mask(
-                ref_shape, 
-                filter_params.get('mode', 'inner'),
-                filter_params.get('rect')
-            )
-        
-        # Initialize accumulator for complex FFT
-        mixed_fft = np.zeros(ref_shape, dtype=np.complex128)
-        
-        # Process each image according to its mode
-        for image_key in self.images.keys():
-            mode = modes.get(image_key, 'magnitude_phase')
-            weight_a = weights_a.get(image_key, 0)
-            weight_b = weights_b.get(image_key, 0)
+        # 1. Get the shape from the first image in the request to initialize accumulators
+        if not weights_a:
+            return None
             
-            # Skip if no weights for this image
-            if weight_a == 0 and weight_b == 0:
+        first_key = next(iter(weights_a.keys()))
+        if first_key not in self.original_images:
+            # Try to find any valid key
+            valid_keys = [k for k in weights_a.keys() if k in self.original_images]
+            if not valid_keys:
+                return None
+            first_key = valid_keys[0]
+            
+        # Use original images for all processing (ignore display adjustments)
+        ref_img = self.original_images[first_key] 
+        h, w = ref_img.shape
+        
+        # Accumulators for the two mixed components
+        mixed_comp_1 = np.zeros((h, w), dtype=np.float64)
+        mixed_comp_2 = np.zeros((h, w), dtype=np.float64)
+        
+        # We need to track the common mode to decide how to reconstruct (Rectangular vs Polar)
+        # Default to the mode of the first image
+        output_mode = modes.get(first_key, 'magnitude_phase')
+
+        # 2. Iterate through all images involved in mixing
+        # We union keys to ensure we catch images that might only have a weight in A or B
+        all_keys = set(weights_a.keys()) | set(weights_b.keys())
+
+        for key in all_keys:
+            if key not in self.original_images:
                 continue
+                
+            # Get raw ORIGINAL image and compute FFT (ignore display adjustments)
+            img_data = self.original_images[key]
+            fft_data = np.fft.fft2(img_data)
             
-            fft_cache = self._get_fft(image_key)
+            # Apply FFT Shift (centers low frequencies)
+            fft_shifted = np.fft.fftshift(fft_data)
+
+            # Get the mode for this specific image
+            mode = modes.get(key, 'magnitude_phase')
             
+            # Get weights (default to 0.0 if not present)
+            wa = weights_a.get(key, 0.0)
+            wb = weights_b.get(key, 0.0)
+
+            # 3. Extract Components based on Mode
             if mode == 'magnitude_phase':
-                # Get magnitude and phase for this image
-                magnitude = fft_cache['magnitude'] * weight_a
-                phase = fft_cache['phase'] * weight_b
+                # Comp 1: Magnitude, Comp 2: Phase
+                # CRITICAL: Use raw np.abs, DO NOT use log scale here!
+                comp_1 = np.abs(fft_shifted)
+                comp_2 = np.angle(fft_shifted)
                 
-                if frequency_mask is not None:
-                    magnitude = magnitude * frequency_mask
-                    phase = phase * frequency_mask
-                
-                # Reconstruct complex FFT: Mag * exp(j*Phase)
-                image_fft = magnitude * np.exp(1j * phase)
+                # If the main output mode is Real/Imag but this image is Mag/Phase, 
+                # mixing them directly is mathematically invalid. 
+                # This code assumes consistency across inputs (as per your prompt).
                 
             elif mode == 'real_imaginary':
-                # Get real and imaginary parts for this image
-                real_part = fft_cache['real'] * weight_a
-                imag_part = fft_cache['imaginary'] * weight_b
-                
-                if frequency_mask is not None:
-                    real_part = real_part * frequency_mask
-                    imag_part = imag_part * frequency_mask
-                
-                # Reconstruct complex FFT: Real + j*Imag
-                image_fft = real_part + 1j * imag_part
-                
-            else:
-                raise ValueError(f"Invalid mode for {image_key}: {mode}")
+                # Comp 1: Real, Comp 2: Imaginary
+                comp_1 = np.real(fft_shifted)
+                comp_2 = np.imag(fft_shifted)
             
-            # Add to accumulated FFT
-            mixed_fft += image_fft
+            # 4. Accumulate Weighted Components
+            mixed_comp_1 += comp_1 * wa
+            mixed_comp_2 += comp_2 * wb
+
+        # 5. Reconstruct the Mixed FFT
+        # This depends on the mode we are operating in.
+        if output_mode == 'magnitude_phase':
+            # Polar Reconstruction: Mag * e^(j*Phase)
+            combined_fft = mixed_comp_1 * np.exp(1j * mixed_comp_2)
+        else:
+            # Rectangular Reconstruction: Real + j*Imag
+            combined_fft = mixed_comp_1 + 1j * mixed_comp_2
+
+        # 6. Inverse FFT
+        # Inverse Shift first
+        combined_fft_ishift = np.fft.ifftshift(combined_fft)
         
-        # Use the accumulated mixed FFT
-        aggregate_matrix = mixed_fft
+        # Inverse FFT to get image space
+        img_back = np.fft.ifft2(combined_fft_ishift)
         
-        # IFFT
-        aggregate_unshifted = np.fft.ifftshift(aggregate_matrix)
+        # Magnitude of complex result (removes residual imaginary parts)
+        img_back = np.abs(img_back)
         
-        # Perform IFFT
-        spatial_complex = np.fft.ifft2(aggregate_unshifted)
+        # 7. Normalize for Display (0-255)
+        # This ensures the output is a valid image format
+        img_back = np.clip(img_back, 0, 255).astype(np.uint8)
         
-        # Take real part and handle any numerical errors
-        output_image = np.real(spatial_complex)
-        output_image = np.abs(output_image)
-        
-        # STEP 5: Clip to valid range without normalization
-        output_image = np.clip(output_image, 0, 255)
-        
-        return output_image.astype(np.uint8)
+        return img_back
     
     def _create_frequency_mask(self, shape, mode, rect_coords):
         """
@@ -324,7 +331,8 @@ class ImageViewer:
             tuple: (adjusted_image, shape, applied_brightness, applied_contrast)
         """
         if image_key not in self.images:
-            raise ValueError(f"Image '{image_key}' not loaded")
+            loaded_keys = list(self.images.keys())
+            raise ValueError(f"Image '{image_key}' not loaded. Available images: {loaded_keys}")
         
         # VALIDATE AND CLAMP incoming values
         brightness = max(0.0, min(2.0, float(brightness)))
@@ -382,18 +390,8 @@ class ImageViewer:
         # CLIP to valid range
         adjusted = np.clip(adjusted, 0, 255)
         
-        # UPDATE the current display image
-        self.images[image_key] = adjusted
-        
-        # RECALCULATE FFT immediately
-        fft_result = np.fft.fftshift(np.fft.fft2(self.images[image_key]))
-        self.fft_cache[image_key] = {
-            'fft': fft_result,
-            'magnitude': np.abs(fft_result),
-            'phase': np.angle(fft_result),
-            'real': np.real(fft_result),
-            'imaginary': np.imag(fft_result)
-        }
+        # Display-only adjustment - do NOT update self.images or FFT cache
+        # All processing uses original images
         
         return adjusted, adjusted.shape, brightness, contrast
     

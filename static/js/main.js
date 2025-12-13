@@ -12,10 +12,6 @@ const state = {
         img3: { brightness: 1.0, contrast: 1.0 },
         img4: { brightness: 1.0, contrast: 1.0 }
     },
-    outputAdjustments: {
-        output1: { brightness: 1.0, contrast: 1.0 },
-        output2: { brightness: 1.0, contrast: 1.0 }
-    },
     mixingModes: {
         img1: 'magnitude_phase',
         img2: 'magnitude_phase',
@@ -68,7 +64,6 @@ function hideStatus() {
 document.addEventListener('DOMContentLoaded', () => {
     initializeFileInputs();
     initializeViewportDrag();
-    initializeOutputViewportDrag();
     initializeComponentViewportDrag();
     initializeComponentSelects();
     initializeMixingMode();
@@ -340,142 +335,6 @@ async function handleDragEnd() {
     document.removeEventListener('mouseup', handleDragEnd);
 }
 
-// Initialize Output Viewport Drag for Brightness/Contrast
-function initializeOutputViewportDrag() {
-    for (let i = 1; i <= 2; i++) {
-        const viewport = document.getElementById(`output-viewport-${i}`);
-        const outputKey = `output${i}`;
-        
-        viewport.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return; // Left button only
-            
-            // Check if there's an image in the output viewport
-            const img = viewport.querySelector('img');
-            if (!img) return;
-            
-            e.preventDefault();
-            e.stopPropagation();
-            
-            state.dragState = {
-                viewport: viewport,
-                outputKey: outputKey,
-                outputIndex: i,
-                startX: e.clientX,
-                startY: e.clientY,
-                initialBrightness: state.outputAdjustments[outputKey].brightness,
-                initialContrast: state.outputAdjustments[outputKey].contrast,
-                isOutput: true
-            };
-            
-            viewport.classList.add('dragging');
-            showAdjustmentIndicator(state.dragState.initialBrightness, state.dragState.initialContrast);
-            
-            document.addEventListener('mousemove', handleOutputDrag);
-            document.addEventListener('mouseup', handleOutputDragEnd);
-        });
-    }
-}
-
-function handleOutputDrag(e) {
-    if (!state.dragState || !state.dragState.isOutput) return;
-    
-    const deltaX = e.clientX - state.dragState.startX;
-    const deltaY = e.clientY - state.dragState.startY;
-    
-    const brightness = state.dragState.initialBrightness - (deltaY / 300);
-    const clampedBrightness = Math.max(0.0, Math.min(2.0, brightness));
-    
-    const contrast = state.dragState.initialContrast + (deltaX / 300);
-    const clampedContrast = Math.max(0.0, Math.min(3.0, contrast));
-    
-    state.outputAdjustments[state.dragState.outputKey] = {
-        brightness: clampedBrightness,
-        contrast: clampedContrast
-    };
-    
-    showAdjustmentIndicator(clampedBrightness, clampedContrast);
-}
-
-async function handleOutputDragEnd() {
-    if (!state.dragState || !state.dragState.isOutput) return;
-    
-    const outputKey = state.dragState.outputKey;
-    const outputIndex = state.dragState.outputIndex;
-    const adjustments = state.outputAdjustments[outputKey];
-    
-    state.dragState.viewport.classList.remove('dragging');
-    
-    hideAdjustmentIndicator();
-    
-    // Apply adjustments to output image using canvas
-    try {
-        const viewport = document.getElementById(`output-viewport-${outputIndex}`);
-        const img = viewport.querySelector('img');
-        if (!img || !img.complete) {
-            state.dragState = null;
-            document.removeEventListener('mousemove', handleOutputDrag);
-            document.removeEventListener('mouseup', handleOutputDragEnd);
-            return;
-        }
-        
-        // Store original image if not already stored
-        if (!state[`originalOutput${outputIndex}`]) {
-            state[`originalOutput${outputIndex}`] = img.src;
-        }
-        
-        // Apply adjustments using canvas
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Load original output image
-        const originalImg = new Image();
-        originalImg.onload = () => {
-            canvas.width = originalImg.width;
-            canvas.height = originalImg.height;
-            
-            // Draw original image
-            ctx.drawImage(originalImg, 0, 0);
-            
-            // Get image data
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            
-            // Apply brightness and contrast (same as input viewports)
-            for (let i = 0; i < data.length; i += 4) {
-                // Apply brightness (multiplier)
-                let r = data[i] * adjustments.brightness;
-                let g = data[i + 1] * adjustments.brightness;
-                let b = data[i + 2] * adjustments.brightness;
-                
-                // Apply contrast (scale around midpoint 127.5)
-                r = (r - 127.5) * adjustments.contrast + 127.5;
-                g = (g - 127.5) * adjustments.contrast + 127.5;
-                b = (b - 127.5) * adjustments.contrast + 127.5;
-                
-                // Clamp values
-                data[i] = Math.max(0, Math.min(255, r));
-                data[i + 1] = Math.max(0, Math.min(255, g));
-                data[i + 2] = Math.max(0, Math.min(255, b));
-            }
-            
-            // Put modified image data back
-            ctx.putImageData(imageData, 0, 0);
-            
-            // Update viewport with adjusted image
-            img.src = canvas.toDataURL('image/png');
-        };
-        
-        originalImg.src = state[`originalOutput${outputIndex}`];
-        
-    } catch (error) {
-        console.error('Failed to apply output adjustments:', error);
-    }
-    
-    state.dragState = null;
-    document.removeEventListener('mousemove', handleOutputDrag);
-    document.removeEventListener('mouseup', handleOutputDragEnd);
-}
-
 // Adjustment Indicator Functions
 let adjustmentTimeout = null;
 
@@ -664,13 +523,6 @@ async function performMixing() {
         const data = await response.json();
         
         if (data.success) {
-            // Store original output and reset adjustments for selected output
-            state[`originalOutput${state.selectedOutput}`] = data.output_image;
-            state.outputAdjustments[`output${state.selectedOutput}`] = {
-                brightness: 1.0,
-                contrast: 1.0
-            };
-            
             // Display in selected output
             displayImage(`output-viewport-${state.selectedOutput}`, data.output_image);
             
@@ -695,8 +547,7 @@ function initializeOutputSelection() {
         const viewport = document.getElementById(`output-viewport-${i}`);
         const container = viewport.parentElement;
         
-        // Double-click to select and trigger mixing
-        viewport.addEventListener('dblclick', () => {
+        viewport.addEventListener('click', () => {
             // Remove previous selection
             document.querySelectorAll('.output-container').forEach(c => {
                 c.classList.remove('selected');
@@ -706,7 +557,7 @@ function initializeOutputSelection() {
             container.classList.add('selected');
             state.selectedOutput = i;
             
-            // Auto-trigger mixing on double-click
+            // Auto-trigger mixing on click
             performMixing();
         });
     }
@@ -1049,3 +900,5 @@ function updateFilterMode() {
         overlay.className = `filter-overlay ${state.filter.mode}-mode`;
     }
 }
+
+

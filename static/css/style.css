@@ -43,7 +43,7 @@ body, html {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 15px;
     align-items: center;
     position: relative;
 }
@@ -64,7 +64,7 @@ body, html {
     font-weight: 600;
     letter-spacing: 0.5px;
     text-transform: uppercase;
-    margin-bottom: 3px;
+    margin-bottom: 6px;
     text-align: center;
 }
 
@@ -84,7 +84,7 @@ body, html {
 .viewport-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 40px;
+    gap: 10px;
     margin-bottom: 10px;
     justify-items: center;
     width: 100%;
@@ -101,7 +101,7 @@ body, html {
 .viewport-with-controls {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 5px;
 }
 
 .viewport {

@@ -1,7 +1,9 @@
 /**
- * Beamforming Simulator - Advanced Plotly Edition
- * Features: Hz Frequencies, Manual Position Control, Antenna Markers, Split Screen
- * Backend Integration: Syncs Snapshots with Django View
+ * Beamforming Simulator - Fixed Edition
+ * Features:
+ * - Active scenario highlighting
+ * - Synchronized controller and graph updates
+ * - Consistent beam steering in both visualizations
  */
 
 class BeamformingSimulator {
@@ -21,8 +23,10 @@ class BeamformingSimulator {
         // Current Scenario Limits for Sliders
         this.freqLimits = { min: 1e8, max: 1e10, step: 1e8 };
 
+        // Track active scenario
+        this.activeScenario = null;
+
         // State for individual antenna properties
-        // Objects: { x: float, y: float, freq: float (Hz) }
         this.antennas = [];
 
         // UI State
@@ -36,12 +40,12 @@ class BeamformingSimulator {
     }
 
     init() {
-        this.resetAntennas(); // Initialize positions based on default config
+        this.resetAntennas();
         this.setupCoordinates();
         this.initPlots();
         this.refreshUI();
         this.attachEventListeners();
-        this.updatePlots(); // Initial Draw
+        this.updatePlots();
 
         // Responsive resize
         window.addEventListener('resize', () => {
@@ -57,7 +61,6 @@ class BeamformingSimulator {
 
         const newAntennas = [];
         for (let i = 0; i < N; i++) {
-            // Keep existing frequency if available, else default middle of range
             const defaultFreq = (this.freqLimits.max + this.freqLimits.min) / 2;
             const existingFreq = (this.antennas[i] && this.antennas[i].freq) ? this.antennas[i].freq : defaultFreq;
 
@@ -65,7 +68,6 @@ class BeamformingSimulator {
             let y = 0;
 
             if (this.config.geometry === 'Curved') {
-                // Parabolic: y = 0.5 + c * x^2
                 y = (this.config.extentY * 0.05) + this.config.curvature * (x * x * 0.5);
             }
 
@@ -242,7 +244,8 @@ class BeamformingSimulator {
                     const k = (2 * Math.PI * ant.freq) / speed;
                     const R = Math.sqrt((xPos - ant.x)**2 + (yPos - ant.y)**2);
 
-                    const phaseDelay = -i * delayRad;
+                    // FIXED: Use consistent phase delay formula
+                    const phaseDelay = i * delayRad;
                     const scale = ant.freq / maxFreq;
 
                     waveSum += scale * Math.cos(k * R + phaseDelay);
@@ -271,7 +274,8 @@ class BeamformingSimulator {
                 const k = (2 * Math.PI * ant.freq) / speed;
 
                 const phase_geom = k * (ant.x * Math.cos(rad) + ant.y * Math.sin(rad));
-                const phase_delay = -i * delayRad;
+                // FIXED: Use same sign convention as heatmap
+                const phase_delay = i * delayRad;
                 const scale = ant.freq / maxFreq;
 
                 real += scale * Math.cos(phase_geom + phase_delay);
@@ -376,10 +380,9 @@ class BeamformingSimulator {
 
         document.getElementById('colormapSelect').addEventListener('change', () => this.updatePlots());
 
-        // Snapshot Button - Sync with backend
+        // Snapshot Button
         document.getElementById('exportBtn').addEventListener('click', async () => {
             try {
-                // Prepare current state for backend
                 const payload = {
                     action: 'quick_save',
                     name: 'Snapshot ' + new Date().toLocaleTimeString(),
@@ -392,11 +395,6 @@ class BeamformingSimulator {
                     }))
                 };
 
-                // Ideally we update the backend with current manual positions first
-                // But quick_save takes the current backend state.
-                // So we should Update then Save.
-
-                // 1. Update Backend
                 await fetch('/api/beamforming/update/', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -404,12 +402,11 @@ class BeamformingSimulator {
                         action: 'update_array',
                         array_id: 0,
                         num_elements: this.config.numAntennas,
-                        frequency: this.freqLimits.max, // base
+                        frequency: this.freqLimits.max,
                         elements: payload.elements
                     })
                 });
 
-                // 2. Trigger Quick Save
                 const response = await fetch('/api/beamforming/quick/', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -426,11 +423,29 @@ class BeamformingSimulator {
         });
     }
 
+    // FIXED: Update active button and sync all controls/graphs
+    setActiveScenario(scenarioName) {
+        // Remove active class from all buttons
+        document.querySelectorAll('.scenario-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+
+        // Add active class to clicked button
+        const activeBtn = document.querySelector(`.scenario-btn[data-scenario="${scenarioName}"]`);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+        }
+
+        this.activeScenario = scenarioName;
+    }
+
+    // FIXED: Properly update all controls and graphs when loading scenario
     loadScenario(type) {
         if(type === '5g') {
             this.config.speed = 3e8;
             this.freqLimits = { min: 1e9, max: 10e9, step: 1e8 };
-            this.config.extentX = 10; this.config.extentY = 20;
+            this.config.extentX = 10;
+            this.config.extentY = 20;
             this.config.numAntennas = 8;
             this.config.distance = 0.5;
             this.config.geometry = 'Linear';
@@ -439,7 +454,8 @@ class BeamformingSimulator {
         } else if (type === 'tumor') {
             this.config.speed = 3e8;
             this.freqLimits = { min: 1e8, max: 5e9, step: 1e8 };
-            this.config.extentX = 2; this.config.extentY = 4;
+            this.config.extentX = 2;
+            this.config.extentY = 4;
             this.config.numAntennas = 16;
             this.config.distance = 0.1;
             this.config.geometry = 'Curved';
@@ -449,22 +465,36 @@ class BeamformingSimulator {
         } else if (type === 'ultrasound') {
             this.config.speed = 1540;
             this.freqLimits = { min: 1e5, max: 1e7, step: 1e5 };
-            this.config.extentX = 0.2; this.config.extentY = 0.4;
+            this.config.extentX = 0.2;
+            this.config.extentY = 0.4;
             this.config.numAntennas = 32;
             this.config.distance = 0.005;
             this.config.geometry = 'Linear';
             this.config.delayDeg = 0;
         }
 
+        // FIXED: Update all UI controls to match scenario values
         document.getElementById('numElements').value = this.config.numAntennas;
+        document.getElementById('numElementsValue').textContent = this.config.numAntennas;
+
         document.getElementById('distance').value = this.config.distance;
+        document.getElementById('distanceValue').textContent = this.config.distance;
+
         document.getElementById('geometry').value = this.config.geometry;
+
         document.getElementById('curvature').value = this.config.curvature;
+        document.getElementById('curvatureValue').textContent = this.config.curvature;
+
         document.getElementById('delay').value = this.config.delayDeg;
+        document.getElementById('delayValue').textContent = this.config.delayDeg + '°';
 
         document.getElementById('curvatureGroup').style.display =
             (this.config.geometry === 'Curved') ? 'block' : 'none';
 
+        // FIXED: Mark this scenario as active
+        this.setActiveScenario(type);
+
+        // Recalculate everything
         this.setupCoordinates();
         this.resetAntennas();
         this.refreshUI();

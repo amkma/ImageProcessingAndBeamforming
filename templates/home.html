@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Processing & Beamforming</title>
+    <style>
+        :root {
+            --theme-bg: #000000;
+            --theme-card: #1a1a1a;
+            --theme-border: #333333;
+            --theme-accent: #ff9000;
+            --theme-accent-hover: #ffaa33;
+            --text-primary: #ffffff;
+            --text-secondary: #aaaaaa;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #000000 0%, #1a0a00 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Animated background particles */
+        .bg-particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 0;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: var(--theme-accent);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: float 20s infinite;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0) translateX(0);
+            }
+            50% {
+                transform: translateY(-100px) translateX(50px);
+            }
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            width: 90%;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 60px;
+            animation: fadeInDown 1s ease-out;
+        }
+
+        .main-title {
+            font-size: 3.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--theme-accent) 0%, #ffcc66 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 15px;
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            font-weight: 300;
+        }
+
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 40px;
+            margin-top: 60px;
+        }
+
+        .card {
+            background: var(--theme-card);
+            border: 2px solid var(--theme-border);
+            border-radius: 16px;
+            padding: 40px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            animation: fadeInUp 1s ease-out;
+        }
+
+        .card:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 144, 0, 0.1), transparent);
+            transition: left 0.6s;
+        }
+
+        .card:hover::before {
+            left: 100%;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: var(--theme-accent);
+            box-shadow: 0 20px 60px rgba(255, 144, 0, 0.3);
+        }
+
+        .card-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--theme-accent), #ffaa33);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 25px;
+            font-size: 2.5rem;
+            transition: all 0.4s;
+        }
+
+        .card:hover .card-icon {
+            transform: rotate(10deg) scale(1.1);
+        }
+
+        .card-title {
+            font-size: 2rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 15px;
+        }
+
+        .card-description {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+
+        .card-features {
+            list-style: none;
+            padding: 0;
+            margin-bottom: 25px;
+        }
+
+        .card-features li {
+            padding: 8px 0;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-features li::before {
+            content: '→';
+            color: var(--theme-accent);
+            font-weight: bold;
+        }
+
+        .card-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--theme-accent);
+            color: #000;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s;
+            border: none;
+            font-size: 1rem;
+            cursor: pointer;
+        }
+
+        .card-button:hover {
+            background: var(--theme-accent-hover);
+            transform: translateX(5px);
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 80px;
+            padding: 20px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            animation: fadeIn 2s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-title {
+                font-size: 2.5rem;
+            }
+
+            .cards-container {
+                grid-template-columns: 1fr;
+            }
+
+            .card {
+                padding: 30px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Animated Background -->
+    <div class="bg-particles" id="particles"></div>
+
+    <div class="container">
+        <!-- Header Section -->
+        <header class="header">
+            <h1 class="main-title">Image Processing & Beamforming</h1>
+            <p class="subtitle">Advanced Signal Processing & Visualization Suite</p>
+        </header>
+
+        <!-- Cards Container -->
+        <div class="cards-container">
+            <!-- Image Processing Card -->
+            <div class="card" onclick="location.href='/image-processing/'">
+                <div class="card-icon">🖼️</div>
+                <h2 class="card-title">Image Processing</h2>
+                <p class="card-description">
+                    Advanced Fourier Transform-based image analysis and manipulation toolkit with real-time frequency domain filtering.
+                </p>
+                <ul class="card-features">
+                    <li>Fourier Transform Analysis</li>
+                    <li>Magnitude & Phase Manipulation</li>
+                    <li>Real-Time Frequency Filtering</li>
+                    <li>Multi-Image Mixing</li>
+                </ul>
+                <button class="card-button">
+                    Launch App
+                    <span>→</span>
+                </button>
+            </div>
+
+            <!-- Beamforming Card -->
+            <div class="card" onclick="location.href='/beamforming/'">
+                <div class="card-icon">📡</div>
+                <h2 class="card-title">Beamforming Simulator</h2>
+                <p class="card-description">
+                    Interactive phased array antenna beamforming simulator with real-time visualization and manual positioning control.
+                </p>
+                <ul class="card-features">
+                    <li>Phased Array Configuration</li>
+                    <li>Real-Time Beam Pattern Visualization</li>
+                    <li>Manual Element Positioning</li>
+                    <li>Multi-Scenario Support</li>
+                </ul>
+                <button class="card-button">
+                    Launch Simulator
+                    <span>→</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Built with Django & Modern Web Technologies</p>
+        </footer>
+    </div>
+
+    <script>
+        // Generate animated particles
+        const particlesContainer = document.getElementById('particles');
+        const particleCount = 50;
+
+        for (let i = 0; i < particleCount; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.top = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 20 + 's';
+            particle.style.animationDuration = (15 + Math.random() * 10) + 's';
+            particlesContainer.appendChild(particle);
+        }
+
+        // Add keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '1') location.href = '/image-processing/';
+            if (e.key === '2') location.href = '/beamforming/';
+        });
+    </script>
+</body>
+</html>

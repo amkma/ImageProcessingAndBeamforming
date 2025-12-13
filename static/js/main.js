@@ -336,6 +336,8 @@ async function handleDragEnd() {
 }
 
 // Adjustment Indicator Functions
+let adjustmentTimeout = null;
+
 function showAdjustmentIndicator(brightness, contrast) {
     const indicator = document.getElementById('adjustment-indicator');
     const brightnessSpan = document.getElementById('adj-brightness');
@@ -345,11 +347,20 @@ function showAdjustmentIndicator(brightness, contrast) {
     contrastSpan.textContent = contrast.toFixed(2);
     
     indicator.classList.add('visible');
+    
+    // Clear existing timeout
+    clearTimeout(adjustmentTimeout);
+    
+    // Auto-fade after 1 second
+    adjustmentTimeout = setTimeout(() => {
+        indicator.classList.remove('visible');
+    }, 1000);
 }
 
 function hideAdjustmentIndicator() {
     const indicator = document.getElementById('adjustment-indicator');
     indicator.classList.remove('visible');
+    clearTimeout(adjustmentTimeout);
 }
 
 // Component Viewport Brightness/Contrast - DISABLED for FT viewports
@@ -397,11 +408,11 @@ function updateModeLabelsForImage(index, mode) {
     const labelB = document.getElementById(`label-b-${index}`);
     
     if (mode === 'magnitude_phase') {
-        labelA.textContent = 'Magnitude';
+        labelA.textContent = 'Mag';
         labelB.textContent = 'Phase';
     } else {
         labelA.textContent = 'Real';
-        labelB.textContent = 'Imaginary';
+        labelB.textContent = 'Imag';
     }
 }
 

@@ -7,228 +7,237 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <div class="container">
-        <!-- Row 1: Input Image Viewports -->
-        <div class="row input-row">
-            <div class="viewport-container">
-                <div class="viewport" id="input-viewport-1">
-                    <span class="placeholder">Click to upload</span>
-                    <input type="file" id="input-file-1" accept="image/*" class="file-input">
+    <div class="split-container">
+        <!-- Left Panel: Viewports -->
+        <div class="left-panel">
+            <!-- Input Viewports -->
+            <div class="viewport-grid">
+                <div class="viewport-container">
+                    <div class="viewport-label">IMAGE 1</div>
+                    <div class="viewport" id="input-viewport-1">
+                        <span class="placeholder">Click to upload</span>
+                        <input type="file" id="input-file-1" accept="image/*" class="file-input">
+                    </div>
+                </div>
+                <div class="viewport-container">
+                    <div class="viewport-label">IMAGE 2</div>
+                    <div class="viewport" id="input-viewport-2">
+                        <span class="placeholder">Click to upload</span>
+                        <input type="file" id="input-file-2" accept="image/*" class="file-input">
+                    </div>
+                </div>
+                <div class="viewport-container">
+                    <div class="viewport-label">IMAGE 3</div>
+                    <div class="viewport" id="input-viewport-3">
+                        <span class="placeholder">Click to upload</span>
+                        <input type="file" id="input-file-3" accept="image/*" class="file-input">
+                    </div>
+                </div>
+                <div class="viewport-container">
+                    <div class="viewport-label">IMAGE 4</div>
+                    <div class="viewport" id="input-viewport-4">
+                        <span class="placeholder">Click to upload</span>
+                        <input type="file" id="input-file-4" accept="image/*" class="file-input">
+                    </div>
                 </div>
             </div>
-            <div class="viewport-container">
-                <div class="viewport" id="input-viewport-2">
-                    <span class="placeholder">Click to upload</span>
-                    <input type="file" id="input-file-2" accept="image/*" class="file-input">
+
+            <!-- Component Viewports with Dropdowns -->
+            <div class="viewport-grid">
+                <div class="viewport-with-controls">
+                    <select id="component-select-1" class="component-select">
+                        <option value="magnitude">FT Magnitude</option>
+                        <option value="phase">FT Phase</option>
+                        <option value="real">FT Real</option>
+                        <option value="imaginary">FT Imaginary</option>
+                    </select>
+                    <div class="viewport component-viewport" id="component-viewport-1">
+                        <span class="placeholder">Component preview</span>
+                        <div class="filter-overlay" id="filter-overlay-1">
+                            <div class="filter-rectangle" id="filter-rect-1">
+                                <div class="resize-handle nw"></div>
+                                <div class="resize-handle ne"></div>
+                                <div class="resize-handle sw"></div>
+                                <div class="resize-handle se"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="viewport-with-controls">
+                    <select id="component-select-2" class="component-select">
+                        <option value="magnitude">FT Magnitude</option>
+                        <option value="phase">FT Phase</option>
+                        <option value="real">FT Real</option>
+                        <option value="imaginary">FT Imaginary</option>
+                    </select>
+                    <div class="viewport component-viewport" id="component-viewport-2">
+                        <span class="placeholder">Component preview</span>
+                        <div class="filter-overlay" id="filter-overlay-2">
+                            <div class="filter-rectangle" id="filter-rect-2">
+                                <div class="resize-handle nw"></div>
+                                <div class="resize-handle ne"></div>
+                                <div class="resize-handle sw"></div>
+                                <div class="resize-handle se"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="viewport-with-controls">
+                    <select id="component-select-3" class="component-select">
+                        <option value="magnitude">FT Magnitude</option>
+                        <option value="phase">FT Phase</option>
+                        <option value="real">FT Real</option>
+                        <option value="imaginary">FT Imaginary</option>
+                    </select>
+                    <div class="viewport component-viewport" id="component-viewport-3">
+                        <span class="placeholder">Component preview</span>
+                        <div class="filter-overlay" id="filter-overlay-3">
+                            <div class="filter-rectangle" id="filter-rect-3">
+                                <div class="resize-handle nw"></div>
+                                <div class="resize-handle ne"></div>
+                                <div class="resize-handle sw"></div>
+                                <div class="resize-handle se"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="viewport-with-controls">
+                    <select id="component-select-4" class="component-select">
+                        <option value="magnitude">FT Magnitude</option>
+                        <option value="phase">FT Phase</option>
+                        <option value="real">FT Real</option>
+                        <option value="imaginary">FT Imaginary</option>
+                    </select>
+                    <div class="viewport component-viewport" id="component-viewport-4">
+                        <span class="placeholder">Component preview</span>
+                        <div class="filter-overlay" id="filter-overlay-4">
+                            <div class="filter-rectangle" id="filter-rect-4">
+                                <div class="resize-handle nw"></div>
+                                <div class="resize-handle ne"></div>
+                                <div class="resize-handle sw"></div>
+                                <div class="resize-handle se"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="viewport-container">
-                <div class="viewport" id="input-viewport-3">
-                    <span class="placeholder">Click to upload</span>
-                    <input type="file" id="input-file-3" accept="image/*" class="file-input">
+
+            <!-- Output Viewports -->
+            <div class="output-section">
+                <div class="viewport-container output-container">
+                    <div class="viewport-label">OUTPUT 1</div>
+                    <div class="viewport output-viewport" id="output-viewport-1">
+                        <span class="placeholder">Mixed output will appear here</span>
+                    </div>
                 </div>
-            </div>
-            <div class="viewport-container">
-                <div class="viewport" id="input-viewport-4">
-                    <span class="placeholder">Click to upload</span>
-                    <input type="file" id="input-file-4" accept="image/*" class="file-input">
+                <div class="viewport-container output-container">
+                    <div class="viewport-label">OUTPUT 2</div>
+                    <div class="viewport output-viewport" id="output-viewport-2">
+                        <span class="placeholder">Mixed output will appear here</span>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Row 2: Component Selection Comboboxes -->
-        <div class="row combobox-row">
-            <div class="combobox-container">
-                <select id="component-select-1" class="component-select">
-                    <option value="magnitude">FT Magnitude</option>
-                    <option value="phase">FT Phase</option>
-                    <option value="real">FT Real</option>
-                    <option value="imaginary">FT Imaginary</option>
-                </select>
-            </div>
-            <div class="combobox-container">
-                <select id="component-select-2" class="component-select">
-                    <option value="magnitude">FT Magnitude</option>
-                    <option value="phase">FT Phase</option>
-                    <option value="real">FT Real</option>
-                    <option value="imaginary">FT Imaginary</option>
-                </select>
-            </div>
-            <div class="combobox-container">
-                <select id="component-select-3" class="component-select">
-                    <option value="magnitude">FT Magnitude</option>
-                    <option value="phase">FT Phase</option>
-                    <option value="real">FT Real</option>
-                    <option value="imaginary">FT Imaginary</option>
-                </select>
-            </div>
-            <div class="combobox-container">
-                <select id="component-select-4" class="component-select">
-                    <option value="magnitude">FT Magnitude</option>
-                    <option value="phase">FT Phase</option>
-                    <option value="real">FT Real</option>
-                    <option value="imaginary">FT Imaginary</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Row 4: Component Display Viewports -->
-        <div class="row component-row">
-            <div class="viewport-container">
-                <div class="viewport component-viewport" id="component-viewport-1">
-                    <span class="placeholder">Component preview</span>
-                    <div class="filter-overlay" id="filter-overlay-1">
-                        <div class="filter-rectangle" id="filter-rect-1">
-                            <div class="resize-handle nw"></div>
-                            <div class="resize-handle ne"></div>
-                            <div class="resize-handle sw"></div>
-                            <div class="resize-handle se"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="viewport-container">
-                <div class="viewport component-viewport" id="component-viewport-2">
-                    <span class="placeholder">Component preview</span>
-                    <div class="filter-overlay" id="filter-overlay-2">
-                        <div class="filter-rectangle" id="filter-rect-2">
-                            <div class="resize-handle nw"></div>
-                            <div class="resize-handle ne"></div>
-                            <div class="resize-handle sw"></div>
-                            <div class="resize-handle se"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="viewport-container">
-                <div class="viewport component-viewport" id="component-viewport-3">
-                    <span class="placeholder">Component preview</span>
-                    <div class="filter-overlay" id="filter-overlay-3">
-                        <div class="filter-rectangle" id="filter-rect-3">
-                            <div class="resize-handle nw"></div>
-                            <div class="resize-handle ne"></div>
-                            <div class="resize-handle sw"></div>
-                            <div class="resize-handle se"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="viewport-container">
-                <div class="viewport component-viewport" id="component-viewport-4">
-                    <span class="placeholder">Component preview</span>
-                    <div class="filter-overlay" id="filter-overlay-4">
-                        <div class="filter-rectangle" id="filter-rect-4">
-                            <div class="resize-handle nw"></div>
-                            <div class="resize-handle ne"></div>
-                            <div class="resize-handle sw"></div>
-                            <div class="resize-handle se"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Row 4: Component A Weights -->
-        <div class="row slider-row">
-            <div class="slider-container">
+        <!-- Right Panel: Controls -->
+        <div class="right-panel">
+            <h3 class="panel-title">Control Dashboard</h3>
+            
+            <!-- Image 1 Controls -->
+            <div class="control-group">
+                <h4 class="control-title">Image 1</h4>
                 <select id="mode-select-1" class="mode-select">
                     <option value="magnitude_phase">Mag & Phase</option>
                     <option value="real_imaginary">Real & Imag</option>
                 </select>
-                <label for="weight-a-1"><span id="label-a-1">Magnitude</span>: <span id="weight-a-value-1">0</span>%</label>
-                <input type="range" id="weight-a-1" class="weight-slider" min="0" max="100" value="0">
+                <div class="slider-wrapper">
+                    <label for="weight-a-1"><span id="label-a-1">Mag</span>: <span id="weight-a-value-1">0</span>%</label>
+                    <input type="range" id="weight-a-1" class="weight-slider" min="0" max="100" value="0">
+                </div>
+                <div class="slider-wrapper">
+                    <label for="weight-b-1"><span id="label-b-1">Phase</span>: <span id="weight-b-value-1">0</span>%</label>
+                    <input type="range" id="weight-b-1" class="weight-slider" min="0" max="100" value="0">
+                </div>
             </div>
-            <div class="slider-container">
+
+            <!-- Image 2 Controls -->
+            <div class="control-group">
+                <h4 class="control-title">Image 2</h4>
                 <select id="mode-select-2" class="mode-select">
                     <option value="magnitude_phase">Mag & Phase</option>
                     <option value="real_imaginary">Real & Imag</option>
                 </select>
-                <label for="weight-a-2"><span id="label-a-2">Magnitude</span>: <span id="weight-a-value-2">0</span>%</label>
-                <input type="range" id="weight-a-2" class="weight-slider" min="0" max="100" value="0">
+                <div class="slider-wrapper">
+                    <label for="weight-a-2"><span id="label-a-2">Mag</span>: <span id="weight-a-value-2">0</span>%</label>
+                    <input type="range" id="weight-a-2" class="weight-slider" min="0" max="100" value="0">
+                </div>
+                <div class="slider-wrapper">
+                    <label for="weight-b-2"><span id="label-b-2">Phase</span>: <span id="weight-b-value-2">0</span>%</label>
+                    <input type="range" id="weight-b-2" class="weight-slider" min="0" max="100" value="0">
+                </div>
             </div>
-            <div class="slider-container">
+
+            <!-- Image 3 Controls -->
+            <div class="control-group">
+                <h4 class="control-title">Image 3</h4>
                 <select id="mode-select-3" class="mode-select">
                     <option value="magnitude_phase">Mag & Phase</option>
                     <option value="real_imaginary">Real & Imag</option>
                 </select>
-                <label for="weight-a-3"><span id="label-a-3">Magnitude</span>: <span id="weight-a-value-3">0</span>%</label>
-                <input type="range" id="weight-a-3" class="weight-slider" min="0" max="100" value="0">
+                <div class="slider-wrapper">
+                    <label for="weight-a-3"><span id="label-a-3">Mag</span>: <span id="weight-a-value-3">0</span>%</label>
+                    <input type="range" id="weight-a-3" class="weight-slider" min="0" max="100" value="0">
+                </div>
+                <div class="slider-wrapper">
+                    <label for="weight-b-3"><span id="label-b-3">Phase</span>: <span id="weight-b-value-3">0</span>%</label>
+                    <input type="range" id="weight-b-3" class="weight-slider" min="0" max="100" value="0">
+                </div>
             </div>
-            <div class="slider-container">
+
+            <!-- Image 4 Controls -->
+            <div class="control-group">
+                <h4 class="control-title">Image 4</h4>
                 <select id="mode-select-4" class="mode-select">
                     <option value="magnitude_phase">Mag & Phase</option>
                     <option value="real_imaginary">Real & Imag</option>
                 </select>
-                <label for="weight-a-4"><span id="label-a-4">Magnitude</span>: <span id="weight-a-value-4">0</span>%</label>
-                <input type="range" id="weight-a-4" class="weight-slider" min="0" max="100" value="0">
+                <div class="slider-wrapper">
+                    <label for="weight-a-4"><span id="label-a-4">Mag</span>: <span id="weight-a-value-4">0</span>%</label>
+                    <input type="range" id="weight-a-4" class="weight-slider" min="0" max="100" value="0">
+                </div>
+                <div class="slider-wrapper">
+                    <label for="weight-b-4"><span id="label-b-4">Phase</span>: <span id="weight-b-value-4">0</span>%</label>
+                    <input type="range" id="weight-b-4" class="weight-slider" min="0" max="100" value="0">
+                </div>
             </div>
-        </div>
 
-        <!-- Row 5: Component B Weights -->
-        <div class="row slider-row">
-            <div class="slider-container">
-                <label for="weight-b-1"><span id="label-b-1">Phase</span>: <span id="weight-b-value-1">0</span>%</label>
-                <input type="range" id="weight-b-1" class="weight-slider" min="0" max="100" value="0">
-            </div>
-            <div class="slider-container">
-                <label for="weight-b-2"><span id="label-b-2">Phase</span>: <span id="weight-b-value-2">0</span>%</label>
-                <input type="range" id="weight-b-2" class="weight-slider" min="0" max="100" value="0">
-            </div>
-            <div class="slider-container">
-                <label for="weight-b-3"><span id="label-b-3">Phase</span>: <span id="weight-b-value-3">0</span>%</label>
-                <input type="range" id="weight-b-3" class="weight-slider" min="0" max="100" value="0">
-            </div>
-            <div class="slider-container">
-                <label for="weight-b-4"><span id="label-b-4">Phase</span>: <span id="weight-b-value-4">0</span>%</label>
-                <input type="range" id="weight-b-4" class="weight-slider" min="0" max="100" value="0">
-            </div>
-        </div>
-
-        <!-- Row 7: Frequency Filter Controls -->
-        <div class="row filter-row">
-            <div class="filter-controls">
-                <div class="filter-group">
-                    <label class="filter-label">Filter Region:</label>
-                    <div class="filter-toggle">
+            <!-- Filter Controls -->
+            <div class="control-group">
+                <h4 class="control-title">Frequency Filter</h4>
+                <div class="filter-controls">
+                    <div class="radio-group">
                         <input type="radio" id="filter-inner" name="filter-mode" value="inner" checked>
                         <label for="filter-inner">Keep Inner (Low Freq)</label>
+                    </div>
+                    <div class="radio-group">
                         <input type="radio" id="filter-outer" name="filter-mode" value="outer">
                         <label for="filter-outer">Keep Outer (High Freq)</label>
                     </div>
-                </div>
-                <div class="filter-group">
-                    <span class="filter-instructions">Drag & Resize rectangle on any component view to filter frequencies</span>
-                </div>
-                <div class="filter-group">
                     <button id="filter-reset" class="filter-button">Reset Filter</button>
                 </div>
             </div>
         </div>
-
-        <!-- Row 8: Output Viewports -->
-        <div class="row output-row">
-            <div class="viewport-container output-container">
-                <div class="viewport output-viewport" id="output-viewport-1">
-                    <span class="placeholder">Mixed output will appear here</span>
-                </div>
-            </div>
-            <div class="viewport-container output-container">
-                <div class="viewport output-viewport" id="output-viewport-2">
-                    <span class="placeholder">Mixed output will appear here</span>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Status Indicator -->
-        <div class="status-indicator" id="status-indicator">
-            <span id="status-text"></span>
-        </div>
-        
-        <!-- Adjustment Indicator -->
-        <div class="adjustment-indicator" id="adjustment-indicator">
-            <div class="adjustment-value">Brightness: <span id="adj-brightness">1.00</span></div>
-            <div class="adjustment-value">Contrast: <span id="adj-contrast">1.00</span></div>
-        </div>
+    </div>
+    
+    <!-- Status Indicator -->
+    <div class="status-indicator" id="status-indicator">
+        <span id="status-text"></span>
+    </div>
+    
+    <!-- Adjustment Indicator -->
+    <div class="adjustment-indicator" id="adjustment-indicator">
+        <div class="adjustment-value">Brightness: <span id="adj-brightness">1.00</span></div>
+        <div class="adjustment-value">Contrast: <span id="adj-contrast">1.00</span></div>
     </div>
 
     <script src="/static/js/main.js"></script>

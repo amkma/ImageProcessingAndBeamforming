@@ -12,6 +12,10 @@ const state = {
         img3: { brightness: 1.0, contrast: 1.0 },
         img4: { brightness: 1.0, contrast: 1.0 }
     },
+    outputAdjustments: {
+        output1: { brightness: 1.0, contrast: 1.0 },
+        output2: { brightness: 1.0, contrast: 1.0 }
+    },
     mixingModes: {
         img1: 'magnitude_phase',
         img2: 'magnitude_phase',
@@ -64,6 +68,7 @@ function hideStatus() {
 document.addEventListener('DOMContentLoaded', () => {
     initializeFileInputs();
     initializeViewportDrag();
+    initializeOutputViewportDrag();
     initializeComponentViewportDrag();
     initializeComponentSelects();
     initializeMixingMode();
@@ -335,6 +340,122 @@ async function handleDragEnd() {
     document.removeEventListener('mouseup', handleDragEnd);
 }
 
+// Initialize Output Viewport Drag for Brightness/Contrast
+function initializeOutputViewportDrag() {
+    for (let i = 1; i <= 2; i++) {
+        const viewport = document.getElementById(`output-viewport-${i}`);
+        const outputKey = `output${i}`;
+        
+        viewport.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return; // Left button only
+            
+            // Check if there's an image in the output viewport
+            const img = viewport.querySelector('img');
+            if (!img) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            state.dragState = {
+                viewport: viewport,
+                outputKey: outputKey,
+                outputIndex: i,
+                startX: e.clientX,
+                startY: e.clientY,
+                initialBrightness: state.outputAdjustments[outputKey].brightness,
+                initialContrast: state.outputAdjustments[outputKey].contrast,
+                isOutput: true
+            };
+            
+            viewport.classList.add('dragging');
+            showAdjustmentIndicator(state.dragState.initialBrightness, state.dragState.initialContrast);
+            
+            document.addEventListener('mousemove', handleOutputDrag);
+            document.addEventListener('mouseup', handleOutputDragEnd);
+        });
+    }
+}
+
+function handleOutputDrag(e) {
+    if (!state.dragState || !state.dragState.isOutput) return;
+    
+    const deltaX = e.clientX - state.dragState.startX;
+    const deltaY = e.clientY - state.dragState.startY;
+    
+    const brightness = state.dragState.initialBrightness - (deltaY / 300);
+    const clampedBrightness = Math.max(0.0, Math.min(2.0, brightness));
+    
+    const contrast = state.dragState.initialContrast + (deltaX / 300);
+    const clampedContrast = Math.max(0.0, Math.min(3.0, contrast));
+    
+    state.outputAdjustments[state.dragState.outputKey] = {
+        brightness: clampedBrightness,
+        contrast: clampedContrast
+    };
+    
+    showAdjustmentIndicator(clampedBrightness, clampedContrast);
+}
+
+async function handleOutputDragEnd() {
+    if (!state.dragState || !state.dragState.isOutput) return;
+    
+    const outputKey = state.dragState.outputKey;
+    const outputIndex = state.dragState.outputIndex;
+    const adjustments = state.outputAdjustments[outputKey];
+    
+    state.dragState.viewport.classList.remove('dragging');
+    
+    hideAdjustmentIndicator();
+    
+    // Apply adjustments to output image
+    try {
+        showStatus('Applying output adjustments...', 'loading');
+        
+        // Get the current output image data URL
+        const viewport = document.getElementById(`output-viewport-${outputIndex}`);
+        const img = viewport.querySelector('img');
+        if (!img) {
+            state.dragState = null;
+            document.removeEventListener('mousemove', handleOutputDrag);
+            document.removeEventListener('mouseup', handleOutputDragEnd);
+            return;
+        }
+        
+        const response = await fetch('/api/apply-adjustments/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                image_key: outputKey,
+                brightness: adjustments.brightness,
+                contrast: adjustments.contrast,
+                reference: 'output',
+                image_data: img.src
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            state.outputAdjustments[outputKey] = {
+                brightness: data.applied_brightness,
+                contrast: data.applied_contrast
+            };
+            
+            displayImage(`output-viewport-${outputIndex}`, data.adjusted_image);
+            showStatus('Output adjustments applied', 'done');
+        } else {
+            showStatus('Failed: ' + data.error, 'done');
+        }
+    } catch (error) {
+        console.error('Failed to apply output adjustments:', error);
+        showStatus('Error applying adjustments', 'done');
+    }
+    
+    state.dragState = null;
+    document.removeEventListener('mousemove', handleOutputDrag);
+    document.removeEventListener('mouseup', handleOutputDragEnd);
+}
+
 // Adjustment Indicator Functions
 let adjustmentTimeout = null;
 
@@ -547,7 +668,8 @@ function initializeOutputSelection() {
         const viewport = document.getElementById(`output-viewport-${i}`);
         const container = viewport.parentElement;
         
-        viewport.addEventListener('click', () => {
+        // Double-click to select and trigger mixing
+        viewport.addEventListener('dblclick', () => {
             // Remove previous selection
             document.querySelectorAll('.output-container').forEach(c => {
                 c.classList.remove('selected');
@@ -557,7 +679,7 @@ function initializeOutputSelection() {
             container.classList.add('selected');
             state.selectedOutput = i;
             
-            // Auto-trigger mixing on click
+            // Auto-trigger mixing on double-click
             performMixing();
         });
     }

@@ -67,12 +67,20 @@
                                 <input type="range" class="form-range" id="numElements" min="2" max="32" value="8">
                             </div>
 
+                            <!-- FIXED: Spacing now in actual METERS -->
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between mb-1">
-                                    <label class="form-label-custom">Spacing (λ/N)</label>
-                                    <span class="slider-value" id="distanceValue">0.15</span>
+                                    <label class="form-label-custom" title="Distance between antenna elements in meters">
+                                        Spacing (m) <i class="fas fa-info-circle text-secondary" style="font-size: 0.7rem;"></i>
+                                    </label>
+                                    <span class="slider-value" id="distanceValue">0.50</span>
                                 </div>
-                                <input type="range" class="form-range" id="distance" min="0.1" max="10" step="0.1" value="0.15">
+                                <input type="range" class="form-range" id="distance" min="0.1" max="5.0" step="0.1" value="0.5">
+                                <div class="text-center mt-1">
+                                    <small class="text-secondary" style="font-size: 0.65rem;">
+                                        Range: 0.1m - 5.0m (10cm to 5 meters)
+                                    </small>
+                                </div>
                             </div>
                             
                             <!-- DELAY SLIDER WITH DIRECTION INDICATOR -->
@@ -142,7 +150,7 @@
 
                     <!-- FREQUENCIES -->
                     <div class="card-custom flex-grow-1 d-flex flex-column" style="min-height: 250px;">
-                        <div class="card-header-custom">Frequencies (Hz)</div>
+                        <div class="card-header-custom">Frequencies (GHz)</div>
                         <div class="card-body p-2 scrollable-frequencies" id="freqContainer">
                         </div>
                     </div>

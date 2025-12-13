@@ -1,15 +1,16 @@
 /**
- * Beamforming Simulator - FULLY WORKING
- * All controllers work in ALL modes (No Scenario, 5G, Tumor, Ultrasound)
+ * Beamforming Simulator - FIXED ANTENNA SPACING
+ * Antennas now properly spaced in METERS with visible separation
+ * All controllers work smoothly in ALL modes
  */
 
 class BeamformingSimulator {
     constructor() {
         this.config = {
             numAntennas: 8,
-            distance: 0.15,
+            distance: 0.5,  // Default spacing in METERS (was 0.15)
             delayDeg: 0,
-            speed: 100,
+            speed: 3e8,     // Speed of light in m/s (was 100)
             geometry: 'Linear',
             curvature: 0.5,
             gridSize: 200,
@@ -17,7 +18,7 @@ class BeamformingSimulator {
             extentY: 20
         };
 
-        this.freqLimits = { min: 100, max: 1000, step: 10 };
+        this.freqLimits = { min: 1e9, max: 3e9, step: 1e8 };  // Default GHz range
         this.activeScenario = null;
         this.activeScenarioName = 'No Scenario Loaded';
         this.antennas = [];
@@ -25,6 +26,7 @@ class BeamformingSimulator {
 
         this.heavyUpdateTimer = null;
         this.isUpdating = false;
+        this.rafId = null;
 
         this.heatmapDiv = document.getElementById('heatmapPlot');
         this.profileDiv = document.getElementById('beamProfilePlot');
@@ -36,10 +38,13 @@ class BeamformingSimulator {
         this.resetAntennas();
         this.setupCoordinates();
         this.initPlots();
-        this.attachEventListeners(); // Attach BEFORE refreshUI
+        this.attachEventListeners();
         this.refreshUI();
-        this.fullUpdate();
         this.updateModeIndicator();
+
+        setTimeout(() => {
+            this.fullUpdate();
+        }, 100);
 
         window.addEventListener('resize', () => {
             clearTimeout(this.heavyUpdateTimer);
@@ -52,21 +57,23 @@ class BeamformingSimulator {
 
     resetAntennas() {
         const N = this.config.numAntennas;
-        const maxFreq = (this.freqLimits.max + this.freqLimits.min) / 2;
-        const wavelength = this.config.speed / maxFreq;
-        const distance_lambda = (1 / this.config.distance) * wavelength;
-        const totalWidth = (N - 1) * distance_lambda;
+        const avgFreq = (this.freqLimits.max + this.freqLimits.min) / 2;
+
+        // FIXED: Use actual meter spacing (no wavelength conversion)
+        const spacing = this.config.distance;  // Direct meters
+        const totalWidth = (N - 1) * spacing;
 
         const newAntennas = [];
         for (let i = 0; i < N; i++) {
-            const defaultFreq = maxFreq;
-            const existingFreq = (this.antennas[i] && this.antennas[i].freq) ? this.antennas[i].freq : defaultFreq;
+            const existingFreq = (this.antennas[i] && this.antennas[i].freq) ? this.antennas[i].freq : avgFreq;
 
-            let x = -totalWidth / 2 + i * distance_lambda;
+            // Position antennas with real meter spacing
+            let x = -totalWidth / 2 + i * spacing;
             let y = 0;
 
             if (this.config.geometry === 'Curved') {
-                y = 0.01 * this.config.extentY + this.config.curvature * (x * x);
+                // Curvature factor adjusted for meter scale
+                y = 0.01 * this.config.extentY + (this.config.curvature * 0.01) * (x * x);
             }
 
             newAntennas.push({ x: x, y: y, freq: existingFreq });
@@ -189,7 +196,6 @@ class BeamformingSimulator {
     }
 
     refreshUI() {
-        // Update antenna selector dropdown
         const select = document.getElementById('antennaSelect');
         select.innerHTML = '';
         this.antennas.forEach((ant, idx) => {
@@ -205,7 +211,6 @@ class BeamformingSimulator {
         select.value = this.selectedAntennaIndex;
         this.updatePositionSliders();
 
-        // Update frequency sliders
         const freqContainer = document.getElementById('freqContainer');
         freqContainer.innerHTML = '';
 
@@ -215,7 +220,7 @@ class BeamformingSimulator {
             div.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <small class="text-secondary">Antenna ${idx + 1}</small>
-                    <small class="text-accent monospace"><span id="freqVal${idx}">${ant.freq.toExponential(2)}</span> Hz</small>
+                    <small class="text-accent monospace"><span id="freqVal${idx}">${(ant.freq / 1e9).toFixed(2)}</span> GHz</small>
                 </div>
                 <input type="range" class="form-range freq-slider" 
                        data-index="${idx}" 
@@ -227,19 +232,17 @@ class BeamformingSimulator {
             freqContainer.appendChild(div);
         });
 
-        // Attach frequency slider listeners
         document.querySelectorAll('.freq-slider').forEach(slider => {
             slider.addEventListener('input', (e) => {
                 const idx = parseInt(e.target.dataset.index);
                 const val = parseFloat(e.target.value);
                 this.antennas[idx].freq = val;
-                document.getElementById(`freqVal${idx}`).innerText = val.toExponential(2);
+                document.getElementById(`freqVal${idx}`).innerText = (val / 1e9).toFixed(2);
 
-                this.scheduleHeavyUpdate();
+                this.scheduleSmoothUpdate();
             });
         });
 
-        // Update slider ranges
         const xSlider = document.getElementById('antX');
         const ySlider = document.getElementById('antY');
         xSlider.min = -this.config.extentX;
@@ -263,7 +266,7 @@ class BeamformingSimulator {
     }
 
     computePhysics() {
-        const speed = this.config.speed;
+        const speed = this.config.speed;  // c = 3e8 m/s
         const size = this.config.gridSize;
         const delayRad = (this.config.delayDeg * Math.PI) / 180;
         const maxFreq = Math.max(...this.antennas.map(a => a.freq));
@@ -286,7 +289,11 @@ class BeamformingSimulator {
                     const dx = xPos - ant.x;
                     const dy = yPos - ant.y;
                     const R = Math.sqrt(dx * dx + dy * dy);
+
+                    // Phase delay from steering
                     const phaseDelay = -i * delayRad;
+
+                    // Frequency normalization
                     const freqScaling = freq / maxFreq;
 
                     waveSum += freqScaling * Math.sin(k * R + phaseDelay);
@@ -363,7 +370,11 @@ class BeamformingSimulator {
         if (this.isUpdating) return;
         this.isUpdating = true;
 
-        requestAnimationFrame(() => {
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+        }
+
+        this.rafId = requestAnimationFrame(() => {
             const data = this.computePhysics();
 
             const antX = this.antennas.map(a => a.x);
@@ -436,7 +447,15 @@ class BeamformingSimulator {
             }], this.profileDiv.layout);
 
             this.isUpdating = false;
+            this.rafId = null;
         });
+    }
+
+    scheduleSmoothUpdate() {
+        clearTimeout(this.heavyUpdateTimer);
+        this.heavyUpdateTimer = setTimeout(() => {
+            this.fullUpdate();
+        }, 50);
     }
 
     scheduleHeavyUpdate() {
@@ -447,51 +466,50 @@ class BeamformingSimulator {
     }
 
     attachEventListeners() {
-        // CRITICAL: Attach listeners ONCE and they persist across scenario loads
-
-        // Number of elements
-        document.getElementById('numElements').addEventListener('input', (e) => {
+        const numElementsSlider = document.getElementById('numElements');
+        numElementsSlider.addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
             this.config.numAntennas = val;
             document.getElementById('numElementsValue').innerText = val;
+        });
 
+        numElementsSlider.addEventListener('change', (e) => {
             this.resetAntennas();
             this.refreshUI();
             this.scheduleHeavyUpdate();
         });
 
-        // Distance
-        document.getElementById('distance').addEventListener('input', (e) => {
+        const distanceSlider = document.getElementById('distance');
+        distanceSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
             this.config.distance = val;
             document.getElementById('distanceValue').innerText = val.toFixed(2);
 
             this.resetAntennas();
             this.updatePositionSliders();
-            this.scheduleHeavyUpdate();
+            this.scheduleSmoothUpdate();
         });
 
-        // Curvature
-        document.getElementById('curvature').addEventListener('input', (e) => {
+        const curvatureSlider = document.getElementById('curvature');
+        curvatureSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
             this.config.curvature = val;
             document.getElementById('curvatureValue').innerText = val.toFixed(1);
 
             this.resetAntennas();
             this.updatePositionSliders();
-            this.scheduleHeavyUpdate();
+            this.scheduleSmoothUpdate();
         });
 
-        // Delay
-        document.getElementById('delay').addEventListener('input', (e) => {
+        const delaySlider = document.getElementById('delay');
+        delaySlider.addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
             this.config.delayDeg = val;
             document.getElementById('delayValue').innerText = val + '°';
 
-            this.scheduleHeavyUpdate();
+            this.scheduleSmoothUpdate();
         });
 
-        // Geometry
         document.getElementById('geometry').addEventListener('change', (e) => {
             this.config.geometry = e.target.value;
             document.getElementById('curvatureGroup').style.display =
@@ -502,38 +520,35 @@ class BeamformingSimulator {
             this.scheduleHeavyUpdate();
         });
 
-        // Antenna selection
         document.getElementById('antennaSelect').addEventListener('change', (e) => {
             this.selectedAntennaIndex = parseInt(e.target.value);
             this.updatePositionSliders();
         });
 
-        // Individual antenna X position
-        document.getElementById('antX').addEventListener('input', (e) => {
+        const antXSlider = document.getElementById('antX');
+        antXSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
             this.antennas[this.selectedAntennaIndex].x = val;
             document.getElementById('antXValue').innerText = val.toFixed(2);
 
             this.updateAntennaPositions();
-            this.scheduleHeavyUpdate();
+            this.scheduleSmoothUpdate();
         });
 
-        // Individual antenna Y position
-        document.getElementById('antY').addEventListener('input', (e) => {
+        const antYSlider = document.getElementById('antY');
+        antYSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
             this.antennas[this.selectedAntennaIndex].y = val;
             document.getElementById('antYValue').innerText = val.toFixed(2);
 
             this.updateAntennaPositions();
-            this.scheduleHeavyUpdate();
+            this.scheduleSmoothUpdate();
         });
 
-        // Colormap
         document.getElementById('colormapSelect').addEventListener('change', () => {
             this.fullUpdate();
         });
 
-        // Export
         document.getElementById('exportBtn').addEventListener('click', () => {
             try {
                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
@@ -582,13 +597,19 @@ class BeamformingSimulator {
     }
 
     loadScenario(type) {
+        clearTimeout(this.heavyUpdateTimer);
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
+        }
+
         if (type === '5g') {
-            this.config.speed = 100;
+            this.config.speed = 3e8;  // Speed of light
             this.freqLimits = { min: 2e9, max: 3e9, step: 1e8 };
             this.config.extentX = 10;
             this.config.extentY = 20;
             this.config.numAntennas = 4;
-            this.config.distance = 1;
+            this.config.distance = 0.5;  // 0.5 meters spacing
             this.config.geometry = 'Linear';
             this.config.delayDeg = 180;
             this.config.curvature = 0;
@@ -596,12 +617,12 @@ class BeamformingSimulator {
             this.activeScenarioName = '5G Beamforming';
 
         } else if (type === 'tumor') {
-            this.config.speed = 100;
+            this.config.speed = 1500;  // Speed of sound in tissue (m/s)
             this.freqLimits = { min: 4e6, max: 5e6, step: 1e5 };
             this.config.extentX = 10;
             this.config.extentY = 20;
             this.config.numAntennas = 10;
-            this.config.distance = 2;
+            this.config.distance = 0.3;  // 0.3 meters spacing
             this.config.geometry = 'Curved';
             this.config.curvature = 24;
             this.config.delayDeg = 0;
@@ -609,12 +630,12 @@ class BeamformingSimulator {
             this.activeScenarioName = 'Tumor Ablation';
 
         } else if (type === 'ultrasound') {
-            this.config.speed = 100;
+            this.config.speed = 1500;  // Speed of sound in tissue (m/s)
             this.freqLimits = { min: 1e6, max: 2e6, step: 1e5 };
             this.config.extentX = 10;
             this.config.extentY = 20;
             this.config.numAntennas = 7;
-            this.config.distance = 4;
+            this.config.distance = 0.4;  // 0.4 meters spacing
             this.config.geometry = 'Linear';
             this.config.delayDeg = 0;
             this.config.curvature = 0;
@@ -622,19 +643,23 @@ class BeamformingSimulator {
             this.activeScenarioName = 'Ultrasound Imaging';
         }
 
-        // Update UI controls to reflect loaded scenario values
-        document.getElementById('numElements').value = this.config.numAntennas;
+        const numElements = document.getElementById('numElements');
+        numElements.value = this.config.numAntennas;
         document.getElementById('numElementsValue').textContent = this.config.numAntennas;
 
-        document.getElementById('distance').value = this.config.distance;
+        const distance = document.getElementById('distance');
+        distance.value = this.config.distance;
         document.getElementById('distanceValue').textContent = this.config.distance.toFixed(2);
 
-        document.getElementById('geometry').value = this.config.geometry;
+        const geometry = document.getElementById('geometry');
+        geometry.value = this.config.geometry;
 
-        document.getElementById('curvature').value = this.config.curvature;
+        const curvature = document.getElementById('curvature');
+        curvature.value = this.config.curvature;
         document.getElementById('curvatureValue').textContent = this.config.curvature.toFixed(1);
 
-        document.getElementById('delay').value = this.config.delayDeg;
+        const delay = document.getElementById('delay');
+        delay.value = this.config.delayDeg;
         document.getElementById('delayValue').textContent = this.config.delayDeg + '°';
 
         document.getElementById('curvatureGroup').style.display =
@@ -644,7 +669,10 @@ class BeamformingSimulator {
         this.setupCoordinates();
         this.resetAntennas();
         this.refreshUI();
-        this.fullUpdate();
+
+        setTimeout(() => {
+            this.fullUpdate();
+        }, 50);
     }
 }
 

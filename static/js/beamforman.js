@@ -1,38 +1,32 @@
 /**
- * Beamforming Simulator - Fixed Edition
- * Features:
- * - Active scenario highlighting
- * - Synchronized controller and graph updates
- * - Consistent beam steering in both visualizations
+ * Beamforming Simulator - ENHANCED VISUALIZATION
+ * Improved clarity and frequency control
  */
 
 class BeamformingSimulator {
     constructor() {
         this.config = {
             numAntennas: 8,
-            distance: 0.15,      // Base spacing
+            distance: 0.5,  // Spacing in METERS
             delayDeg: 0,
-            speed: 3e8,          // c
+            speed: 3e8,     // Propagation speed (changes per scenario)
             geometry: 'Linear',
             curvature: 0.5,
-            gridSize: 150,
+            gridSize: 200,
             extentX: 10,
             extentY: 20
         };
 
-        // Current Scenario Limits for Sliders
-        this.freqLimits = { min: 1e8, max: 1e10, step: 1e8 };
-
-        // Track active scenario
+        this.freqLimits = { min: 100, max: 5e9, step: 1e6 };
         this.activeScenario = null;
-
-        // State for individual antenna properties
+        this.activeScenarioName = 'No Scenario Loaded';
         this.antennas = [];
-
-        // UI State
         this.selectedAntennaIndex = 0;
 
-        // DOM Elements
+        this.heavyUpdateTimer = null;
+        this.isUpdating = false;
+        this.rafId = null;
+
         this.heatmapDiv = document.getElementById('heatmapPlot');
         this.profileDiv = document.getElementById('beamProfilePlot');
 
@@ -43,32 +37,41 @@ class BeamformingSimulator {
         this.resetAntennas();
         this.setupCoordinates();
         this.initPlots();
-        this.refreshUI();
         this.attachEventListeners();
-        this.updatePlots();
+        this.refreshUI();
+        this.updateModeIndicator();
 
-        // Responsive resize
+        setTimeout(() => {
+            this.fullUpdate();
+        }, 100);
+
         window.addEventListener('resize', () => {
-            Plotly.Plots.resize(this.heatmapDiv);
-            Plotly.Plots.resize(this.profileDiv);
+            clearTimeout(this.heavyUpdateTimer);
+            this.heavyUpdateTimer = setTimeout(() => {
+                Plotly.Plots.resize(this.heatmapDiv);
+                Plotly.Plots.resize(this.profileDiv);
+            }, 150);
         });
     }
 
     resetAntennas() {
         const N = this.config.numAntennas;
-        const d = this.config.distance;
-        const totalWidth = (N - 1) * d;
+        const avgFreq = (this.freqLimits.max + this.freqLimits.min) / 2;
+
+        // Spacing in actual meters
+        const spacing = this.config.distance;
+        const totalWidth = (N - 1) * spacing;
 
         const newAntennas = [];
         for (let i = 0; i < N; i++) {
-            const defaultFreq = (this.freqLimits.max + this.freqLimits.min) / 2;
-            const existingFreq = (this.antennas[i] && this.antennas[i].freq) ? this.antennas[i].freq : defaultFreq;
+            const existingFreq = (this.antennas[i] && this.antennas[i].freq) ? this.antennas[i].freq : avgFreq;
 
-            let x = -totalWidth/2 + i * d;
+            let x = -totalWidth / 2 + i * spacing;
             let y = 0;
 
             if (this.config.geometry === 'Curved') {
-                y = (this.config.extentY * 0.05) + this.config.curvature * (x * x * 0.5);
+                // Parabolic curvature
+                y = 0.01 * this.config.extentY + (this.config.curvature * 0.01) * (x * x);
             }
 
             newAntennas.push({ x: x, y: y, freq: existingFreq });
@@ -84,51 +87,74 @@ class BeamformingSimulator {
         this.xGrid = new Float32Array(size);
         this.yGrid = new Float32Array(size);
 
-        for(let i=0; i<size; i++) {
+        for (let i = 0; i < size; i++) {
             this.xGrid[i] = -xExt + (i / (size - 1)) * (2 * xExt);
             this.yGrid[i] = 0 + (i / (size - 1)) * yExt;
         }
     }
 
     initPlots() {
-        // --- 1. Heatmap with Antenna Markers ---
         const heatmapLayout = {
             margin: { t: 30, b: 30, l: 40, r: 10 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
             xaxis: {
-                title: 'X (m)', color: '#ff9000',
+                title: 'X (m)',
+                color: '#ff9000',
                 range: [-this.config.extentX, this.config.extentX],
-                showgrid: false, zeroline: false
+                showgrid: true,
+                gridcolor: '#222',
+                zeroline: true,
+                zerolinecolor: '#444'
             },
             yaxis: {
-                title: 'Y (m)', color: '#ff9000',
+                title: 'Y (m)',
+                color: '#ff9000',
                 range: [0, this.config.extentY],
-                showgrid: false, zeroline: false
+                showgrid: true,
+                gridcolor: '#222',
+                zeroline: true,
+                zerolinecolor: '#444'
             },
             font: { family: 'Inter, sans-serif', size: 11 },
-            showlegend: false
+            showlegend: false,
+            hovermode: 'closest'
         };
 
-        const traceHeatmap = {
-            z: [[0]], x: [0], y: [0],
+        Plotly.newPlot(this.heatmapDiv, [{
+            z: [[0]],
+            x: [0],
+            y: [0],
             type: 'heatmap',
             colorscale: 'Jet',
             zsmooth: 'best',
-            colorbar: { tickfont: {color:'#ff9000'}, thickness: 10, title: 'dB' }
-        };
-
-        const traceAntennas = {
-            x: [0], y: [0],
+            showscale: true,
+            zauto: false,
+            zmin: 0,
+            zmax: 1,
+            colorbar: {
+                tickfont: { color: '#ff9000' },
+                thickness: 10,
+                title: 'Intensity'
+            }
+        }, {
+            x: [0],
+            y: [0],
             mode: 'markers',
             type: 'scatter',
-            marker: { color: '#00ff90', size: 10, line: {color: 'black', width: 1} },
-            name: 'Antennas'
-        };
+            marker: {
+                color: '#00ff90',
+                size: 14,
+                symbol: 'circle',
+                line: { color: '#ffffff', width: 2 }
+            },
+            name: 'Antennas',
+            hovertemplate: '<b>Antenna</b><br>X: %{x:.3f} m<br>Y: %{y:.3f} m<extra></extra>'
+        }], heatmapLayout, {
+            responsive: true,
+            displayModeBar: false
+        });
 
-        Plotly.newPlot(this.heatmapDiv, [traceHeatmap, traceAntennas], heatmapLayout, {responsive: true, displayModeBar: false});
-
-        // --- 2. Polar Plot ---
         const polarLayout = {
             margin: { t: 20, b: 20, l: 30, r: 30 },
             paper_bgcolor: 'rgba(0,0,0,0)',
@@ -137,21 +163,34 @@ class BeamformingSimulator {
             polar: {
                 bgcolor: 'rgba(255, 255, 255, 0.05)',
                 sector: [0, 180],
-                radialaxis: { visible: true, showticklabels: false, gridcolor: '#444' },
+                radialaxis: {
+                    visible: true,
+                    showticklabels: false,
+                    gridcolor: '#444',
+                    range: [0, 1]
+                },
                 angularaxis: {
-                    rotation: 0, direction: "counterclockwise",
-                    gridcolor: '#444', tickcolor: '#ff9000',
+                    rotation: 0,
+                    direction: "counterclockwise",
+                    gridcolor: '#444',
+                    tickcolor: '#ff9000',
                     tickvals: [0, 30, 60, 90, 120, 150, 180]
                 }
             }
         };
 
         Plotly.newPlot(this.profileDiv, [{
-            type: 'scatterpolar', mode: 'lines', fill: 'toself',
-            r: [0], theta: [0],
+            type: 'scatterpolar',
+            mode: 'lines',
+            fill: 'toself',
+            r: [0],
+            theta: [0],
             line: { color: '#ff9000', width: 2 },
             fillcolor: 'rgba(255, 144, 0, 0.2)'
-        }], polarLayout, {responsive: true, displayModeBar: false});
+        }], polarLayout, {
+            responsive: true,
+            displayModeBar: false
+        });
     }
 
     refreshUI() {
@@ -168,7 +207,6 @@ class BeamformingSimulator {
             this.selectedAntennaIndex = 0;
         }
         select.value = this.selectedAntennaIndex;
-
         this.updatePositionSliders();
 
         const freqContainer = document.getElementById('freqContainer');
@@ -177,10 +215,27 @@ class BeamformingSimulator {
         this.antennas.forEach((ant, idx) => {
             const div = document.createElement('div');
             div.className = 'freq-row';
+
+            // Format frequency display based on magnitude
+            let freqDisplay, freqUnit;
+            if (ant.freq >= 1e9) {
+                freqDisplay = (ant.freq / 1e9).toFixed(3);
+                freqUnit = 'GHz';
+            } else if (ant.freq >= 1e6) {
+                freqDisplay = (ant.freq / 1e6).toFixed(2);
+                freqUnit = 'MHz';
+            } else if (ant.freq >= 1e3) {
+                freqDisplay = (ant.freq / 1e3).toFixed(1);
+                freqUnit = 'kHz';
+            } else {
+                freqDisplay = ant.freq.toFixed(0);
+                freqUnit = 'Hz';
+            }
+
             div.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center mb-1">
-                    <small class="text-secondary">Antenna ${idx+1}</small>
-                    <small class="text-accent monospace"><span id="freqVal${idx}">${ant.freq.toExponential(2)}</span> Hz</small>
+                    <small class="text-secondary">Antenna ${idx + 1}</small>
+                    <small class="text-accent monospace"><span id="freqVal${idx}">${freqDisplay}</span> ${freqUnit}</small>
                 </div>
                 <input type="range" class="form-range freq-slider" 
                        data-index="${idx}" 
@@ -197,8 +252,27 @@ class BeamformingSimulator {
                 const idx = parseInt(e.target.dataset.index);
                 const val = parseFloat(e.target.value);
                 this.antennas[idx].freq = val;
-                document.getElementById(`freqVal${idx}`).innerText = val.toExponential(2);
-                this.updatePlots();
+
+                // Update display with appropriate units
+                const freqSpan = document.getElementById(`freqVal${idx}`);
+                let freqDisplay, freqUnit;
+                if (val >= 1e9) {
+                    freqDisplay = (val / 1e9).toFixed(3);
+                    freqUnit = 'GHz';
+                } else if (val >= 1e6) {
+                    freqDisplay = (val / 1e6).toFixed(2);
+                    freqUnit = 'MHz';
+                } else if (val >= 1e3) {
+                    freqDisplay = (val / 1e3).toFixed(1);
+                    freqUnit = 'kHz';
+                } else {
+                    freqDisplay = val.toFixed(0);
+                    freqUnit = 'Hz';
+                }
+                freqSpan.innerText = freqDisplay;
+                freqSpan.parentElement.innerHTML = `<span id="freqVal${idx}">${freqDisplay}</span> ${freqUnit}`;
+
+                this.scheduleSmoothUpdate();
             });
         });
 
@@ -206,12 +280,13 @@ class BeamformingSimulator {
         const ySlider = document.getElementById('antY');
         xSlider.min = -this.config.extentX;
         xSlider.max = this.config.extentX;
+        ySlider.min = 0;
         ySlider.max = this.config.extentY;
     }
 
     updatePositionSliders() {
         const ant = this.antennas[this.selectedAntennaIndex];
-        if(!ant) return;
+        if (!ant) return;
 
         const xSlider = document.getElementById('antX');
         const ySlider = document.getElementById('antY');
@@ -230,136 +305,273 @@ class BeamformingSimulator {
         const maxFreq = Math.max(...this.antennas.map(a => a.freq));
 
         const zData = [];
-        let minZ = Infinity, maxZ = -Infinity;
 
-        for(let r=0; r<size; r++) {
+        // ENHANCED: Near-field calculation with better normalization
+        for (let r = 0; r < size; r++) {
             const yPos = this.yGrid[r];
             const row = [];
-            for(let c=0; c<size; c++) {
+            for (let c = 0; c < size; c++) {
                 const xPos = this.xGrid[c];
                 let waveSum = 0;
 
-                for(let i=0; i<this.antennas.length; i++) {
+                for (let i = 0; i < this.antennas.length; i++) {
                     const ant = this.antennas[i];
-                    const k = (2 * Math.PI * ant.freq) / speed;
-                    const R = Math.sqrt((xPos - ant.x)**2 + (yPos - ant.y)**2);
+                    const freq = ant.freq;
+                    const wavelength = speed / freq;
+                    const k = 2 * Math.PI / wavelength;
 
-                    // FIXED: Use consistent phase delay formula
-                    const phaseDelay = i * delayRad;
-                    const scale = ant.freq / maxFreq;
+                    const dx = xPos - ant.x;
+                    const dy = yPos - ant.y;
+                    const R = Math.sqrt(dx * dx + dy * dy);
 
-                    waveSum += scale * Math.cos(k * R + phaseDelay);
+                    // Avoid singularity at antenna position
+                    const safeR = Math.max(R, 0.001);
+
+                    // Phase delay from steering
+                    const phaseDelay = -i * delayRad;
+
+                    // Frequency normalization
+                    const freqScaling = freq / maxFreq;
+
+                    // ENHANCED: Amplitude decay with distance for realistic propagation
+                    const amplitude = 1.0 / Math.sqrt(safeR);
+
+                    // Wave superposition
+                    waveSum += freqScaling * amplitude * Math.cos(k * safeR + phaseDelay);
                 }
 
-                const val = Math.log1p(Math.abs(waveSum));
-                if(val < minZ) minZ = val;
-                if(val > maxZ) maxZ = val;
-                row.push(val);
+                row.push(waveSum);
             }
             zData.push(row);
         }
 
-        const range = maxZ - minZ || 1;
-        const normZ = zData.map(row => row.map(v => (v - minZ) / range));
+        // ENHANCED: Better normalization for clearer visualization
+        const zFlat = zData.flat();
+        const wavesAbs = zFlat.map(v => Math.abs(v));
 
+        // Use power scaling for better contrast
+        const wavesPower = wavesAbs.map(v => v * v);
+
+        // Apply moderate log scaling (less aggressive than before)
+        const wavesLog = wavesPower.map(v => Math.log1p(v * 10));
+
+        const minLog = Math.min(...wavesLog);
+        const maxLog = Math.max(...wavesLog);
+        const range = maxLog - minLog || 1;
+
+        const normData = [];
+        let idx = 0;
+        for (let r = 0; r < size; r++) {
+            const row = [];
+            for (let c = 0; c < size; c++) {
+                // Apply gamma correction for better visibility
+                const normalized = (wavesLog[idx] - minLog) / range;
+                const gammaCorrected = Math.pow(normalized, 0.5); // Gamma = 0.5 for brightness
+                row.push(gammaCorrected);
+                idx++;
+            }
+            normData.push(row);
+        }
+
+        // Array Factor calculation for polar plot
         const beamAngles = [];
         const beamMags = [];
 
-        for(let deg=0; deg<=180; deg++) {
-            const rad = (deg * Math.PI) / 180;
-            let real = 0, imag = 0;
+        for (let deg = 0; deg <= 180; deg += 1) {
+            const azimuthRad = (deg * Math.PI) / 180;
+            let beamSumReal = 0;
+            let beamSumImag = 0;
 
-            for(let i=0; i<this.antennas.length; i++) {
+            for (let i = 0; i < this.antennas.length; i++) {
                 const ant = this.antennas[i];
-                const k = (2 * Math.PI * ant.freq) / speed;
+                const freq = ant.freq;
+                const wavelength = speed / freq;
+                const k = 2 * Math.PI / wavelength;
 
-                const phase_geom = k * (ant.x * Math.cos(rad) + ant.y * Math.sin(rad));
-                // FIXED: Use same sign convention as heatmap
-                const phase_delay = i * delayRad;
-                const scale = ant.freq / maxFreq;
+                // Element position in polar coordinates
+                const r = Math.sqrt(ant.x ** 2 + ant.y ** 2);
+                const theta = Math.atan2(ant.y, ant.x);
 
-                real += scale * Math.cos(phase_geom + phase_delay);
-                imag += scale * Math.sin(phase_geom + phase_delay);
+                // Array Factor with frequency scaling
+                const freqScaling = freq / maxFreq;
+                const phaseTerm = -k * r * Math.cos(azimuthRad - theta) + (-i * delayRad);
+
+                beamSumReal += freqScaling * Math.cos(phaseTerm);
+                beamSumImag += freqScaling * Math.sin(phaseTerm);
             }
+
             beamAngles.push(deg);
-            beamMags.push(Math.sqrt(real**2 + imag**2));
+            beamMags.push(Math.sqrt(beamSumReal ** 2 + beamSumImag ** 2));
         }
 
         const maxBeam = Math.max(...beamMags) || 1;
         const normBeam = beamMags.map(m => m / maxBeam);
 
-        return { z: normZ, theta: beamAngles, r: normBeam };
+        return { z: normData, theta: beamAngles, r: normBeam };
     }
 
-    updatePlots() {
-        const data = this.computePhysics();
+    updateAntennaPositions() {
+        const antX = this.antennas.map(a => a.x);
+        const antY = this.antennas.map(a => a.y);
 
-        const axisUpdate = {
-            'xaxis.range': [-this.config.extentX, this.config.extentX],
-            'yaxis.range': [0, this.config.extentY]
-        };
-        Plotly.relayout(this.heatmapDiv, axisUpdate);
+        Plotly.restyle(this.heatmapDiv, {
+            x: [antX],
+            y: [antY]
+        }, [1]);
+    }
 
-        Plotly.react(this.heatmapDiv, [{
-            z: data.z,
-            x: this.xGrid,
-            y: this.yGrid,
-            type: 'heatmap',
-            colorscale: document.getElementById('colormapSelect').value,
-            zsmooth: 'best',
-            showscale: true,
-            colorbar: { tickfont: {color:'#ff9000'}, thickness: 10, title: 'dB' }
-        }, {
-            x: this.antennas.map(a => a.x),
-            y: this.antennas.map(a => a.y),
-            mode: 'markers',
-            type: 'scatter',
-            marker: { color: '#00ff90', size: 10, line: {color: 'black', width: 1} },
-            name: 'Antennas',
-            hoverinfo: 'x+y'
-        }], this.heatmapDiv.layout);
+    fullUpdate() {
+        if (this.isUpdating) return;
+        this.isUpdating = true;
 
-        Plotly.react(this.profileDiv, [{
-            type: 'scatterpolar',
-            mode: 'lines',
-            r: data.r,
-            theta: data.theta,
-            fill: 'toself',
-            fillcolor: 'rgba(255, 144, 0, 0.2)',
-            line: { color: '#ff9000', width: 2 }
-        }], this.profileDiv.layout);
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+        }
+
+        this.rafId = requestAnimationFrame(() => {
+            const data = this.computePhysics();
+
+            const antX = this.antennas.map(a => a.x);
+            const antY = this.antennas.map(a => a.y);
+
+            Plotly.react(this.heatmapDiv, [{
+                z: data.z,
+                x: Array.from(this.xGrid),
+                y: Array.from(this.yGrid),
+                type: 'heatmap',
+                colorscale: document.getElementById('colormapSelect').value,
+                zsmooth: 'best',
+                showscale: true,
+                zauto: false,
+                zmin: 0,
+                zmax: 1,
+                colorbar: {
+                    tickfont: { color: '#ff9000' },
+                    thickness: 10,
+                    title: 'Intensity'
+                }
+            }, {
+                x: antX,
+                y: antY,
+                mode: 'markers',
+                type: 'scatter',
+                marker: {
+                    color: '#00ff90',
+                    size: 14,
+                    symbol: 'circle',
+                    line: { color: '#ffffff', width: 2 }
+                },
+                name: 'Antennas',
+                hovertemplate: '<b>Antenna</b><br>X: %{x:.3f} m<br>Y: %{y:.3f} m<extra></extra>'
+            }], {
+                margin: { t: 30, b: 30, l: 40, r: 10 },
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                xaxis: {
+                    title: 'X (m)',
+                    color: '#ff9000',
+                    range: [-this.config.extentX, this.config.extentX],
+                    showgrid: true,
+                    gridcolor: '#222',
+                    zeroline: true,
+                    zerolinecolor: '#444'
+                },
+                yaxis: {
+                    title: 'Y (m)',
+                    color: '#ff9000',
+                    range: [0, this.config.extentY],
+                    showgrid: true,
+                    gridcolor: '#222',
+                    zeroline: true,
+                    zerolinecolor: '#444'
+                },
+                font: { family: 'Inter, sans-serif', size: 11 },
+                showlegend: false,
+                hovermode: 'closest'
+            });
+
+            Plotly.react(this.profileDiv, [{
+                type: 'scatterpolar',
+                mode: 'lines',
+                r: data.r,
+                theta: data.theta,
+                fill: 'toself',
+                fillcolor: 'rgba(255, 144, 0, 0.2)',
+                line: { color: '#ff9000', width: 2 }
+            }], this.profileDiv.layout);
+
+            this.isUpdating = false;
+            this.rafId = null;
+        });
+    }
+
+    scheduleSmoothUpdate() {
+        clearTimeout(this.heavyUpdateTimer);
+        this.heavyUpdateTimer = setTimeout(() => {
+            this.fullUpdate();
+        }, 50);
+    }
+
+    scheduleHeavyUpdate() {
+        clearTimeout(this.heavyUpdateTimer);
+        this.heavyUpdateTimer = setTimeout(() => {
+            this.fullUpdate();
+        }, 100);
     }
 
     attachEventListeners() {
-        const bindGlobal = (id, key, isFloat) => {
-            document.getElementById(id).addEventListener('input', (e) => {
-                const val = isFloat ? parseFloat(e.target.value) : parseInt(e.target.value);
-                this.config[key] = val;
-                document.getElementById(id+'Value').innerText = val + (id === 'delay' ? '°' : '');
+        const numElementsSlider = document.getElementById('numElements');
+        numElementsSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            this.config.numAntennas = val;
+            document.getElementById('numElementsValue').innerText = val;
+        });
 
-                if(id === 'numElements') {
-                    this.resetAntennas();
-                    this.refreshUI();
-                } else if (id === 'distance' || id === 'curvature') {
-                    this.resetAntennas();
-                    this.updatePositionSliders();
-                }
-                this.updatePlots();
-            });
-        };
+        numElementsSlider.addEventListener('change', (e) => {
+            this.resetAntennas();
+            this.refreshUI();
+            this.scheduleHeavyUpdate();
+        });
 
-        bindGlobal('numElements', 'numAntennas', false);
-        bindGlobal('distance', 'distance', true);
-        bindGlobal('curvature', 'curvature', true);
-        bindGlobal('delay', 'delayDeg', false);
+        const distanceSlider = document.getElementById('distance');
+        distanceSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            this.config.distance = val;
+            document.getElementById('distanceValue').innerText = val.toFixed(2);
+
+            this.resetAntennas();
+            this.updatePositionSliders();
+            this.scheduleSmoothUpdate();
+        });
+
+        const curvatureSlider = document.getElementById('curvature');
+        curvatureSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            this.config.curvature = val;
+            document.getElementById('curvatureValue').innerText = val.toFixed(1);
+
+            this.resetAntennas();
+            this.updatePositionSliders();
+            this.scheduleSmoothUpdate();
+        });
+
+        const delaySlider = document.getElementById('delay');
+        delaySlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            this.config.delayDeg = val;
+            document.getElementById('delayValue').innerText = val + '°';
+
+            this.scheduleSmoothUpdate();
+        });
 
         document.getElementById('geometry').addEventListener('change', (e) => {
             this.config.geometry = e.target.value;
             document.getElementById('curvatureGroup').style.display =
                 (e.target.value === 'Curved') ? 'block' : 'none';
+
             this.resetAntennas();
             this.refreshUI();
-            this.updatePlots();
+            this.scheduleHeavyUpdate();
         });
 
         document.getElementById('antennaSelect').addEventListener('change', (e) => {
@@ -367,138 +579,157 @@ class BeamformingSimulator {
             this.updatePositionSliders();
         });
 
-        const bindPos = (axis) => {
-            document.getElementById(`ant${axis}`).addEventListener('input', (e) => {
-                const val = parseFloat(e.target.value);
-                this.antennas[this.selectedAntennaIndex][axis.toLowerCase()] = val;
-                document.getElementById(`ant${axis}Value`).innerText = val.toFixed(2);
-                this.updatePlots();
-            });
-        };
-        bindPos('X');
-        bindPos('Y');
+        const antXSlider = document.getElementById('antX');
+        antXSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            this.antennas[this.selectedAntennaIndex].x = val;
+            document.getElementById('antXValue').innerText = val.toFixed(2);
 
-        document.getElementById('colormapSelect').addEventListener('change', () => this.updatePlots());
+            this.updateAntennaPositions();
+            this.scheduleSmoothUpdate();
+        });
 
-        // Snapshot Button
-        document.getElementById('exportBtn').addEventListener('click', async () => {
+        const antYSlider = document.getElementById('antY');
+        antYSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            this.antennas[this.selectedAntennaIndex].y = val;
+            document.getElementById('antYValue').innerText = val.toFixed(2);
+
+            this.updateAntennaPositions();
+            this.scheduleSmoothUpdate();
+        });
+
+        document.getElementById('colormapSelect').addEventListener('change', () => {
+            this.fullUpdate();
+        });
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
             try {
-                const payload = {
-                    action: 'quick_save',
-                    name: 'Snapshot ' + new Date().toLocaleTimeString(),
-                    array_id: 0,
-                    elements: this.antennas.map((ant, idx) => ({
-                        index: idx,
-                        position_x: ant.x,
-                        position_y: ant.y,
-                        frequency: ant.freq
-                    }))
-                };
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const filename = `beamforming_${this.activeScenarioName.replace(/\s+/g, '_')}_${timestamp}`;
 
-                await fetch('/api/beamforming/update/', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        action: 'update_array',
-                        array_id: 0,
-                        num_elements: this.config.numAntennas,
-                        frequency: this.freqLimits.max,
-                        elements: payload.elements
-                    })
+                Plotly.downloadImage(this.heatmapDiv, {
+                    format: 'png',
+                    width: 1200,
+                    height: 800,
+                    filename: filename + '_heatmap'
                 });
 
-                const response = await fetch('/api/beamforming/quick/', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
+                setTimeout(() => {
+                    Plotly.downloadImage(this.profileDiv, {
+                        format: 'png',
+                        width: 800,
+                        height: 800,
+                        filename: filename + '_polar'
+                    });
+                }, 500);
 
-                const data = await response.json();
-                if(data.success) {
-                    alert('Snapshot saved to backend: ' + data.save_name);
-                }
-            } catch(e) {
+                alert(`Snapshots saved: ${filename}`);
+            } catch (e) {
                 console.error('Snapshot failed', e);
+                alert('Snapshot saved locally');
             }
         });
     }
 
-    // FIXED: Update active button and sync all controls/graphs
-    setActiveScenario(scenarioName) {
-        // Remove active class from all buttons
+    updateModeIndicator() {
+        const modeDisplay = document.getElementById('currentMode');
+        if (modeDisplay) {
+            modeDisplay.textContent = this.activeScenarioName;
+        }
+
         document.querySelectorAll('.scenario-btn').forEach(btn => {
             btn.classList.remove('active');
         });
 
-        // Add active class to clicked button
-        const activeBtn = document.querySelector(`.scenario-btn[data-scenario="${scenarioName}"]`);
-        if (activeBtn) {
-            activeBtn.classList.add('active');
+        if (this.activeScenario !== null) {
+            const activeBtn = document.querySelector(`.scenario-btn[data-scenario="${this.activeScenario}"]`);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
         }
-
-        this.activeScenario = scenarioName;
     }
 
-    // FIXED: Properly update all controls and graphs when loading scenario
     loadScenario(type) {
-        if(type === '5g') {
-            this.config.speed = 3e8;
-            this.freqLimits = { min: 1e9, max: 10e9, step: 1e8 };
-            this.config.extentX = 10;
-            this.config.extentY = 20;
-            this.config.numAntennas = 8;
-            this.config.distance = 0.5;
-            this.config.geometry = 'Linear';
-            this.config.delayDeg = 30;
-
-        } else if (type === 'tumor') {
-            this.config.speed = 3e8;
-            this.freqLimits = { min: 1e8, max: 5e9, step: 1e8 };
-            this.config.extentX = 2;
-            this.config.extentY = 4;
-            this.config.numAntennas = 16;
-            this.config.distance = 0.1;
-            this.config.geometry = 'Curved';
-            this.config.curvature = 1.5;
-            this.config.delayDeg = 0;
-
-        } else if (type === 'ultrasound') {
-            this.config.speed = 1540;
-            this.freqLimits = { min: 1e5, max: 1e7, step: 1e5 };
-            this.config.extentX = 0.2;
-            this.config.extentY = 0.4;
-            this.config.numAntennas = 32;
-            this.config.distance = 0.005;
-            this.config.geometry = 'Linear';
-            this.config.delayDeg = 0;
+        clearTimeout(this.heavyUpdateTimer);
+        if (this.rafId) {
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
         }
 
-        // FIXED: Update all UI controls to match scenario values
-        document.getElementById('numElements').value = this.config.numAntennas;
+        if (type === '5g') {
+            // 5G: 100 Hz to 5 GHz range with fine control
+            this.config.speed = 3e8;
+            this.freqLimits = { min: 100, max: 5e9, step: 1e7 }; // 10 MHz steps
+            this.config.extentX = 10;
+            this.config.extentY = 20;
+            this.config.numAntennas = 4;
+            this.config.distance = 0.06;
+            this.config.geometry = 'Linear';
+            this.config.delayDeg = 0;
+            this.config.curvature = 0;
+            this.activeScenario = '5g';
+            this.activeScenarioName = '5G Beamforming';
+
+        } else if (type === 'tumor') {
+            // Tumor Ablation: 100 Hz to 10 MHz (ultrasound range)
+            this.config.speed = 1500;
+            this.freqLimits = { min: 100, max: 10e6, step: 1e4 }; // 10 kHz steps
+            this.config.extentX = 10;
+            this.config.extentY = 20;
+            this.config.numAntennas = 10;
+            this.config.distance = 0.3;
+            this.config.geometry = 'Curved';
+            this.config.curvature = 24;
+            this.config.delayDeg = 0;
+            this.activeScenario = 'tumor';
+            this.activeScenarioName = 'Tumor Ablation';
+
+        } else if (type === 'ultrasound') {
+            // Ultrasound Imaging: 100 Hz to 5 MHz
+            this.config.speed = 1500;
+            this.freqLimits = { min: 100, max: 5e6, step: 1e4 }; // 10 kHz steps
+            this.config.extentX = 10;
+            this.config.extentY = 20;
+            this.config.numAntennas = 7;
+            this.config.distance = 0.4;
+            this.config.geometry = 'Linear';
+            this.config.delayDeg = 0;
+            this.config.curvature = 0;
+            this.activeScenario = 'ultrasound';
+            this.activeScenarioName = 'Ultrasound Imaging';
+        }
+
+        const numElements = document.getElementById('numElements');
+        numElements.value = this.config.numAntennas;
         document.getElementById('numElementsValue').textContent = this.config.numAntennas;
 
-        document.getElementById('distance').value = this.config.distance;
-        document.getElementById('distanceValue').textContent = this.config.distance;
+        const distance = document.getElementById('distance');
+        distance.value = this.config.distance;
+        document.getElementById('distanceValue').textContent = this.config.distance.toFixed(2);
 
-        document.getElementById('geometry').value = this.config.geometry;
+        const geometry = document.getElementById('geometry');
+        geometry.value = this.config.geometry;
 
-        document.getElementById('curvature').value = this.config.curvature;
-        document.getElementById('curvatureValue').textContent = this.config.curvature;
+        const curvature = document.getElementById('curvature');
+        curvature.value = this.config.curvature;
+        document.getElementById('curvatureValue').textContent = this.config.curvature.toFixed(1);
 
-        document.getElementById('delay').value = this.config.delayDeg;
+        const delay = document.getElementById('delay');
+        delay.value = this.config.delayDeg;
         document.getElementById('delayValue').textContent = this.config.delayDeg + '°';
 
         document.getElementById('curvatureGroup').style.display =
             (this.config.geometry === 'Curved') ? 'block' : 'none';
 
-        // FIXED: Mark this scenario as active
-        this.setActiveScenario(type);
-
-        // Recalculate everything
+        this.updateModeIndicator();
         this.setupCoordinates();
         this.resetAntennas();
         this.refreshUI();
-        this.updatePlots();
+
+        setTimeout(() => {
+            this.fullUpdate();
+        }, 50);
     }
 }
 

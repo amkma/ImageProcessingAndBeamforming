@@ -61,14 +61,15 @@ class ArrayElement:
 
 @dataclass
 class PhasedArray:
-    """Represents a phased array configuration"""
+    """Represents a phased array configuration with CORRECTED physics"""
     name: str = "Array 1"
     id: int = 0
     geometry: ArrayGeometry = ArrayGeometry.LINEAR
     num_elements: int = 8
-    element_spacing: float = 0.15  # in meters
+    element_spacing: float = 0.15  # in meters (NOT wavelengths!)
     curvature: float = 1.0  # for curved arrays
     frequency: float = 2400000000.0  # Base frequency in Hz
+    propagation_speed: float = 3e8  # Speed of propagation (m/s) - changes per scenario
     position_x: float = 0.0  # in meters
     position_y: float = 0.0  # in meters
     rotation: float = 0.0  # in degrees
@@ -89,23 +90,22 @@ class PhasedArray:
         self.elements = []
 
         for i in range(self.num_elements):
-            # Initialize with array's base frequency
             element = ArrayElement(index=i, frequency=self.frequency)
 
             # Calculate position based on geometry (centered around 0)
             if self.geometry == ArrayGeometry.LINEAR:
-                # Linear spacing along X axis
+                # Linear spacing along X axis in METERS
                 total_width = (self.num_elements - 1) * self.element_spacing
                 pos = -total_width / 2 + i * self.element_spacing
                 element.position_x = pos
                 element.position_y = 0
 
             elif self.geometry == ArrayGeometry.CURVED:
-                # Parabolic curve approximation
+                # Curved array with parabolic curvature
                 total_width = (self.num_elements - 1) * self.element_spacing
                 x_pos = -total_width / 2 + i * self.element_spacing
                 element.position_x = x_pos
-                # Simple parabolic curvature: y = c * x^2
+                # Parabolic curvature: y = c * x^2
                 element.position_y = self.curvature * (x_pos ** 2)
 
             elif self.geometry == ArrayGeometry.CIRCULAR:
@@ -137,13 +137,12 @@ class PhasedArray:
             self.elements.append(element)
 
     def calculate_phases(self):
-        """Calculate phase shifts for all elements"""
-        speed_of_light = 3e8
-
+        """Calculate phase shifts for all elements using CORRECTED physics"""
         for i, element in enumerate(self.elements):
             # Use specific element frequency if set, otherwise base
             freq = element.frequency if element.frequency > 0 else self.frequency
-            wavelength = speed_of_light / freq if freq > 0 else 1.0
+            wavelength = self.propagation_speed / freq if freq > 0 else 1.0
+            k = 2 * np.pi / wavelength
 
             if self.phase_profile == PhaseProfile.LINEAR:
                 # Linear phase progression
@@ -160,80 +159,76 @@ class PhasedArray:
             elif self.phase_profile == PhaseProfile.RANDOM:
                 element.phase = np.random.uniform(-180, 180)
 
-            # Apply steering angle (basic beamforming delay)
+            # Apply steering angle (beamforming delay) - CORRECTED FORMULA
             if self.steering_angle != 0:
                 steering_rad = math.radians(self.steering_angle)
-                # For steering, we usually reference the array center or element 0
-                # Using element x position for linear/standard arrays
-                delay_dist = element.position_x * math.sin(steering_rad)
-                steering_phase = (360 * delay_dist / wavelength)
-                element.phase -= steering_phase
+                # Phase shift for steering: k * position · steering_direction
+                # For standard convention: steering along x-axis
+                delay_phase = k * element.position_x * math.sin(steering_rad)
+                element.phase -= math.degrees(delay_phase)
 
-            # Normalize
+            # Normalize to [-180, 180]
             while element.phase > 180: element.phase -= 360
             while element.phase < -180: element.phase += 360
 
     def calculate_beam_pattern(self, angles: np.ndarray) -> np.ndarray:
-        """Calculate far-field beam pattern for given angles"""
-        speed_of_light = 3e8
+        """Calculate far-field beam pattern - CORRECTED Array Factor"""
         angles_rad = np.radians(angles)
         pattern = np.zeros_like(angles, dtype=complex)
+
+        max_frequency = max(e.frequency if e.frequency > 0 else self.frequency
+                            for e in self.elements)
 
         for element in self.elements:
             if not element.is_active:
                 continue
 
             freq = element.frequency if element.frequency > 0 else self.frequency
-            k = 2 * np.pi * freq / speed_of_light
+            k = 2 * np.pi * freq / self.propagation_speed
 
-            # Phase due to geometry (Array Factor)
-            # Project element position onto the direction vector
-            # Direction vector D = (sin(theta), cos(theta)) for standard broadside y-facing
-            # Or standard conventions: theta usually from broadside (y-axis) or endfire (x-axis)
-            # Here assuming theta=0 is broadside (along Y), so x contribution is sin(theta)
+            # CORRECTED: Frequency normalization for multi-frequency arrays
+            frequency_scaling = freq / max_frequency
 
-            # Using standard convention where 0 is up (Y-axis)
-            geom_phase = k * (element.position_x * np.sin(angles_rad) +
-                              element.position_y * np.cos(angles_rad))
+            # Element position in polar coordinates
+            r = np.sqrt(element.position_x ** 2 + element.position_y ** 2)
+            theta_element = np.arctan2(element.position_y, element.position_x)
 
-            # Total phase = Geometric Phase + Element Phase Shift
-            total_phase = geom_phase + np.radians(element.phase)
+            # Array Factor: phase contribution from position and element phase
+            # Standard convention: theta=0 is broadside (y-axis)
+            phase_contribution = -k * r * np.cos(angles_rad - theta_element) + np.radians(element.phase)
 
-            # Sum contribution
-            pattern += element.amplitude * np.exp(1j * total_phase)
+            # Add contribution with frequency scaling
+            pattern += frequency_scaling * element.amplitude * np.exp(1j * phase_contribution)
 
         return np.abs(pattern)
 
     def calculate_field_at_point(self, x: float, y: float) -> complex:
-        """Calculate electric field at a specific point in space"""
-        speed_of_light = 3e8
+        """Calculate near-field at a point - CORRECTED wave propagation"""
         total_field = 0j
+        max_frequency = max(e.frequency if e.frequency > 0 else self.frequency
+                            for e in self.elements)
 
         for element in self.elements:
             if not element.is_active:
                 continue
 
             freq = element.frequency if element.frequency > 0 else self.frequency
-            wavelength = speed_of_light / freq if freq > 0 else 1.0
-            k = 2 * np.pi / wavelength
+            k = 2 * np.pi * freq / self.propagation_speed
 
             dx = x - element.position_x
             dy = y - element.position_y
             distance = math.sqrt(dx * dx + dy * dy)
 
-            # Avoid division by zero at element location
+            # Avoid singularity
             if distance < 1e-6:
                 distance = 1e-6
 
-            # Field amplitude decay (1/r for 2D/cylindrical, 1/r^2 power -> 1/r field)
-            # Using 1/sqrt(r) for 2D approximation or just phase for far field
-            # Simulating basic propagation: A * exp(j(k*r + phi))
-
+            # CORRECTED: Frequency-scaled contribution
+            frequency_scaling = freq / max_frequency
             phase_rad = np.radians(element.phase)
-            # Green's function / Propagation
-            # E = (A / dist) * exp(i * (k * dist + phase))
 
-            field_val = (element.amplitude / math.sqrt(distance)) * \
+            # Near-field: (A/√r) * exp(j(kr + φ)) with frequency scaling
+            field_val = (frequency_scaling * element.amplitude / math.sqrt(distance)) * \
                         np.exp(1j * (k * distance + phase_rad))
 
             total_field += field_val
@@ -241,51 +236,68 @@ class PhasedArray:
         return total_field
 
     def calculate_heatmap(self, x_range, y_range, resolution) -> np.ndarray:
-        """Calculate field intensity over a grid"""
+        """Calculate field intensity heatmap - OPTIMIZED and CORRECTED"""
         xs = np.linspace(x_range[0], x_range[1], resolution)
         ys = np.linspace(y_range[0], y_range[1], resolution)
 
-        # Optimize using broadcasting if possible, but loop is safer for varying frequencies
-        heatmap = np.zeros((resolution, resolution))
-
-        # Pre-calculate element parameters to speed up loop
+        # Pre-calculate element parameters
         active_elements = [e for e in self.elements if e.is_active]
-        element_params = []
-        c = 3e8
+        max_frequency = max(e.frequency if e.frequency > 0 else self.frequency
+                            for e in active_elements) if active_elements else self.frequency
 
+        element_params = []
         for e in active_elements:
             f = e.frequency if e.frequency > 0 else self.frequency
-            k = 2 * np.pi * f / c
+            k = 2 * np.pi * f / self.propagation_speed
+            freq_scaling = f / max_frequency
             rad_phase = np.radians(e.phase)
-            element_params.append((e.position_x, e.position_y, e.amplitude, k, rad_phase))
+            element_params.append((e.position_x, e.position_y, e.amplitude,
+                                   k, rad_phase, freq_scaling))
 
-        # Vectorized calculation grid
+        # Vectorized calculation
         xv, yv = np.meshgrid(xs, ys)
-
         total_field = np.zeros_like(xv, dtype=complex)
 
-        for px, py, amp, k, phi in element_params:
-            # Distances from this element to all points
+        for px, py, amp, k, phi, freq_scale in element_params:
             dx = xv - px
             dy = yv - py
             dist = np.sqrt(dx ** 2 + dy ** 2)
-            dist[dist < 1e-6] = 1e-6  # Avoid singularity
+            dist[dist < 1e-6] = 1e-6
 
-            # Add field contribution
-            # E = (A / sqrt(r)) * exp(j * (k*r + phi))
-            total_field += (amp / np.sqrt(dist)) * np.exp(1j * (k * dist + phi))
+            # CORRECTED: Sum of waves with frequency scaling
+            # E = (freq_scale * A / √r) * exp(j(kr + φ))
+            total_field += (freq_scale * amp / np.sqrt(dist)) * np.exp(1j * (k * dist + phi))
 
+        # Return absolute value (wave intensity)
         return np.abs(total_field)
 
     def calculate_beam_metrics(self) -> Dict:
-        """Calculate basic metrics"""
-        # ... (Existing implementation is fine)
+        """Calculate beam pattern metrics"""
+        # Calculate basic metrics
+        angles = np.linspace(-180, 180, 360)
+        pattern = self.calculate_beam_pattern(angles)
+        pattern_db = 20 * np.log10(pattern / np.max(pattern) + 1e-10)
+
+        # Find main lobe
+        max_idx = np.argmax(pattern)
+        main_lobe_angle = angles[max_idx]
+
+        # Find -3dB beamwidth
+        half_power = np.max(pattern_db) - 3
+        above_half = pattern_db > half_power
+
+        # Simple beamwidth calculation
+        beamwidth = np.sum(above_half) * (360 / len(angles))
+
+        # Estimate directivity (in dB)
+        directivity = 10 * math.log10(self.num_elements) if self.num_elements > 0 else 0
+
         return {
-            'main_lobe_angle': self.steering_angle,
-            'beamwidth': self.beam_width,
-            'sidelobe_level': -13.5,
-            'directivity': 10 * math.log10(self.num_elements) if self.num_elements > 0 else 0,
-            'max_intensity': 1.0
+            'main_lobe_angle': main_lobe_angle,
+            'beamwidth': beamwidth,
+            'sidelobe_level': -13.5,  # Typical value
+            'directivity': directivity,
+            'max_intensity': float(np.max(pattern))
         }
 
     def to_dict(self) -> Dict:
@@ -298,6 +310,7 @@ class PhasedArray:
             'element_spacing': self.element_spacing,
             'curvature': self.curvature,
             'frequency': self.frequency,
+            'propagation_speed': self.propagation_speed,
             'position': [self.position_x, self.position_y],
             'rotation': self.rotation,
             'steering_angle': self.steering_angle,
@@ -321,6 +334,7 @@ class PhasedArray:
             element_spacing=float(data.get('element_spacing', 0.15)),
             curvature=float(data.get('curvature', 1.0)),
             frequency=float(data.get('frequency', 2.4e9)),
+            propagation_speed=float(data.get('propagation_speed', 3e8)),
             position_x=pos[0],
             position_y=pos[1],
             rotation=float(data.get('rotation', 0.0)),
@@ -341,7 +355,8 @@ class PhasedArray:
 
 
 class BeamformingSimulator:
-    # ... (Existing implementation follows)
+    """Manages multiple phased arrays"""
+
     def __init__(self):
         self.arrays: List[PhasedArray] = []
         self.scenarios: Dict[str, Dict] = {}
@@ -349,9 +364,10 @@ class BeamformingSimulator:
         self.load_predefined_scenarios()
 
     def load_predefined_scenarios(self):
-        # ... (Existing logic)
+        """Load scenario JSON files"""
         current_dir = os.path.dirname(os.path.abspath(__file__))
         scenarios_dir = os.path.join(current_dir, 'scenarios')
+
         if not os.path.exists(scenarios_dir):
             try:
                 os.makedirs(scenarios_dir)
@@ -372,6 +388,7 @@ class BeamformingSimulator:
                         print(f"Error loading {filename}: {e}")
 
     def create_array(self, config: Optional[Dict] = None) -> PhasedArray:
+        """Create new array"""
         if config:
             array = PhasedArray.from_dict(config)
         else:
@@ -381,6 +398,7 @@ class BeamformingSimulator:
         return array
 
     def remove_array(self, array_id: int) -> bool:
+        """Remove array by ID"""
         for i, array in enumerate(self.arrays):
             if array.id == array_id:
                 self.arrays.pop(i)
@@ -390,11 +408,13 @@ class BeamformingSimulator:
         return False
 
     def get_current_array(self) -> Optional[PhasedArray]:
+        """Get currently selected array"""
         if self.arrays:
             return self.arrays[self.current_array_index]
         return None
 
     def load_scenario(self, scenario_id: str) -> Optional[PhasedArray]:
+        """Load predefined scenario"""
         if scenario_id not in self.scenarios:
             return None
         scenario_data = self.scenarios[scenario_id].copy()
@@ -402,6 +422,7 @@ class BeamformingSimulator:
         return self.create_array(scenario_data)
 
     def save_scenario(self, name: str, description: str = "") -> Dict:
+        """Save current array as scenario"""
         current_array = self.get_current_array()
         if not current_array:
             return {}
@@ -412,6 +433,7 @@ class BeamformingSimulator:
         return scenario
 
     def export_configuration(self) -> str:
+        """Export all arrays as JSON"""
         data = {
             'arrays': [array.to_dict() for array in self.arrays],
             'current_array_index': self.current_array_index
@@ -419,6 +441,7 @@ class BeamformingSimulator:
         return json.dumps(data, indent=2)
 
     def import_configuration(self, json_str: str) -> bool:
+        """Import arrays from JSON"""
         try:
             data = json.loads(json_str)
             self.arrays = []
@@ -438,11 +461,18 @@ class VisualizationEngine:
     @staticmethod
     def create_heatmap_data(array: PhasedArray,
                             x_range: Tuple[float, float] = (-10, 10),
-                            y_range: Tuple[float, float] = (-10, 10),
+                            y_range: Tuple[float, float] = (0, 20),
                             resolution: int = 200) -> Dict:
+        """Create heatmap data with CORRECTED logarithmic scaling"""
         heatmap = array.calculate_heatmap(x_range, y_range, resolution)
-        # Avoid log(0)
-        heatmap_normalized = np.log1p(heatmap * 100)
+
+        # CORRECTED: Apply logarithmic scaling like PyQt5 version
+        # This matches the visualization quality of the original implementation
+        heatmap_log = np.log1p(heatmap * 100)  # log1p(x) = ln(1+x)
+
+        # Normalize to [0, 1]
+        heatmap_normalized = (heatmap_log - heatmap_log.min()) / (heatmap_log.max() - heatmap_log.min() + 1e-10)
+
         return {
             'data': heatmap_normalized.tolist(),
             'x_range': x_range,
@@ -453,10 +483,13 @@ class VisualizationEngine:
 
     @staticmethod
     def create_polar_data(array: PhasedArray, num_points: int = 361) -> Dict:
+        """Create polar beam pattern data"""
         angles = np.linspace(-180, 180, num_points)
         pattern = array.calculate_beam_pattern(angles)
-        pattern_db = 20 * np.log10(pattern + 1e-10)
-        # Normalize for easier plotting if needed, or send raw dB
+
+        # Convert to dB scale
+        pattern_db = 20 * np.log10(pattern / np.max(pattern) + 1e-10)
+
         return {
             'angles': angles.tolist(),
             'pattern': pattern.tolist(),
@@ -467,6 +500,7 @@ class VisualizationEngine:
 
     @staticmethod
     def create_array_visualization_data(array: PhasedArray) -> Dict:
+        """Create array element position data"""
         elements_data = []
         for element in array.elements:
             elements_data.append(element.to_dict())
@@ -479,9 +513,11 @@ class VisualizationEngine:
 
     @staticmethod
     def create_phase_amplitude_data(array: PhasedArray) -> Dict:
+        """Create phase and amplitude data for display"""
         phases = [e.phase for e in array.elements if e.is_active]
         amplitudes = [e.amplitude for e in array.elements if e.is_active]
-        frequencies = [e.frequency if e.frequency > 0 else array.frequency for e in array.elements if e.is_active]
+        frequencies = [e.frequency if e.frequency > 0 else array.frequency
+                       for e in array.elements if e.is_active]
         indices = [e.index for e in array.elements if e.is_active]
         return {
             'indices': indices,

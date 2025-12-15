@@ -1,9 +1,17 @@
 {
     "name": "Tumor Ablation",
     "geometry": "curved",
-    "num_elements": 16,
-    "element_spacing": 0.01,
-    "frequency": 1000000000.0,
-    "curvature": 1.5,
-    "steering_angle": 0.0
+    "num_elements": 10,
+    "element_spacing": 0.3,
+    "frequency": 4500000.0,
+    "propagation_speed": 1500.0,
+    "curvature": 0.24,
+    "steering_angle": 0.0,
+    "position": [0.0, 0.01],
+    "rotation": 0.0,
+    "focus_distance": 5.0,
+    "beam_width": 30.0,
+    "phase_profile": "linear",
+    "phase_slope": 0.0,
+    "apply_delays": false
 }

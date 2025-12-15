@@ -161,100 +161,81 @@ class ImageViewer:
         fft_cache = self._get_fft(image_key)
         return fft_cache['imaginary']
     
-    def mix_images(self, modes, weights_a, weights_b, filter_params=None):
+    def mix_images(self, modes, weights_a, weights_b, region_params):
         """
-        Core logic to mix images in frequency domain.
-        'weights_a' controls Component 1 (Magnitude or Real).
-        'weights_b' controls Component 2 (Phase or Imaginary).
-        """
+        Core logic to mix images in frequency domain with unified Region Model.
+        ALWAYS applies frequency mask based on region_params (no conditional logic).
         
-        # 1. Get the shape from the first image in the request to initialize accumulators
+        Args:
+            modes: dict {image_key: 'magnitude_phase' or 'real_imaginary'}
+            weights_a: dict {image_key: weight for Component 1 (Mag/Real)}
+            weights_b: dict {image_key: weight for Component 2 (Phase/Imag)}
+            region_params: dict with 'x', 'y', 'width', 'height' (normalized 0-1) and 'type' ('inner'/'outer')
+                          For full spectrum: {'x': 0, 'y': 0, 'width': 1.0, 'height': 1.0, 'type': 'inner'}
+                          For custom filter: user-defined rectangle values
+        
+        Returns:
+            numpy.ndarray: Mixed output image (uint8)
+        """
         if not weights_a:
             return None
             
         first_key = next(iter(weights_a.keys()))
         if first_key not in self.original_images:
-            # Try to find any valid key
             valid_keys = [k for k in weights_a.keys() if k in self.original_images]
             if not valid_keys:
                 return None
             first_key = valid_keys[0]
             
-        # Use original images for all processing (ignore display adjustments)
         ref_img = self.original_images[first_key] 
         h, w = ref_img.shape
+        
+        # ALWAYS create frequency mask (unified Region Model)
+        frequency_mask = self._create_frequency_mask((h, w), region_params['type'], region_params)
         
         # Accumulators for the two mixed components
         mixed_comp_1 = np.zeros((h, w), dtype=np.float64)
         mixed_comp_2 = np.zeros((h, w), dtype=np.float64)
         
-        # We need to track the common mode to decide how to reconstruct (Rectangular vs Polar)
-        # Default to the mode of the first image
         output_mode = modes.get(first_key, 'magnitude_phase')
-
-        # 2. Iterate through all images involved in mixing
-        # We union keys to ensure we catch images that might only have a weight in A or B
         all_keys = set(weights_a.keys()) | set(weights_b.keys())
 
         for key in all_keys:
             if key not in self.original_images:
                 continue
                 
-            # Get raw ORIGINAL image and compute FFT (ignore display adjustments)
             img_data = self.original_images[key]
             fft_data = np.fft.fft2(img_data)
-            
-            # Apply FFT Shift (centers low frequencies)
             fft_shifted = np.fft.fftshift(fft_data)
 
-            # Get the mode for this specific image
             mode = modes.get(key, 'magnitude_phase')
-            
-            # Get weights (default to 0.0 if not present)
             wa = weights_a.get(key, 0.0)
             wb = weights_b.get(key, 0.0)
 
-            # 3. Extract Components based on Mode
             if mode == 'magnitude_phase':
-                # Comp 1: Magnitude, Comp 2: Phase
-                # CRITICAL: Use raw np.abs, DO NOT use log scale here!
                 comp_1 = np.abs(fft_shifted)
                 comp_2 = np.angle(fft_shifted)
-                
-                # If the main output mode is Real/Imag but this image is Mag/Phase, 
-                # mixing them directly is mathematically invalid. 
-                # This code assumes consistency across inputs (as per your prompt).
-                
             elif mode == 'real_imaginary':
-                # Comp 1: Real, Comp 2: Imaginary
                 comp_1 = np.real(fft_shifted)
                 comp_2 = np.imag(fft_shifted)
             
-            # 4. Accumulate Weighted Components
+            # Apply mask to both components
+            comp_1 = comp_1 * frequency_mask
+            comp_2 = comp_2 * frequency_mask
+            
             mixed_comp_1 += comp_1 * wa
             mixed_comp_2 += comp_2 * wb
 
-        # 5. Reconstruct the Mixed FFT
-        # This depends on the mode we are operating in.
+        # Reconstruct combined FFT
         if output_mode == 'magnitude_phase':
-            # Polar Reconstruction: Mag * e^(j*Phase)
             combined_fft = mixed_comp_1 * np.exp(1j * mixed_comp_2)
         else:
-            # Rectangular Reconstruction: Real + j*Imag
             combined_fft = mixed_comp_1 + 1j * mixed_comp_2
 
-        # 6. Inverse FFT
-        # Inverse Shift first
+        # Inverse FFT
         combined_fft_ishift = np.fft.ifftshift(combined_fft)
-        
-        # Inverse FFT to get image space
         img_back = np.fft.ifft2(combined_fft_ishift)
-        
-        # Magnitude of complex result (removes residual imaginary parts)
         img_back = np.abs(img_back)
-        
-        # 7. Normalize for Display (0-255)
-        # This ensures the output is a valid image format
         img_back = np.clip(img_back, 0, 255).astype(np.uint8)
         
         return img_back

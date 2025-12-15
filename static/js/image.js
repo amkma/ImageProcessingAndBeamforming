@@ -649,6 +649,17 @@ async function performMixing() {
     state.pendingRequest = controller;
     
     try {
+        // Unified Region Model: always send region params
+        // Full spectrum mode: x=0, y=0, width=1.0, height=1.0, type='inner'
+        // Custom filter mode: use state.filter.rect values
+        const regionParams = {
+            x: state.filter.rect.x,
+            y: state.filter.rect.y,
+            width: state.filter.rect.width,
+            height: state.filter.rect.height,
+            type: state.filter.mode
+        };
+        
         const response = await fetch('/api/mix/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -656,7 +667,7 @@ async function performMixing() {
                 modes: state.mixingModes,
                 weights_a: state.weightsA,
                 weights_b: state.weightsB,
-                filter: state.filter
+                region: regionParams
             }),
             signal: controller.signal
         });

@@ -146,12 +146,14 @@ def get_fft_component(request):
 @csrf_exempt
 def mix_images(request):
     """
-    Mix images using dual-component weighting.
+    Mix images using unified Region Model.
     POST params:
         - modes: dict {image_key: mode} where mode is 'magnitude_phase' or 'real_imaginary'
         - weights_a: dict {image_key: weight} for component A
         - weights_b: dict {image_key: weight} for component B
-        - filter: dict with 'mode' and 'rect' [optional]
+        - region: dict with 'x', 'y', 'width', 'height' (normalized 0-1) and 'type' ('inner'/'outer')
+                 Full spectrum: {'x': 0, 'y': 0, 'width': 1.0, 'height': 1.0, 'type': 'inner'}
+                 Custom filter: user-defined rectangle
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
@@ -161,13 +163,13 @@ def mix_images(request):
         modes = data.get('modes', {})
         weights_a = data.get('weights_a', {})
         weights_b = data.get('weights_b', {})
-        filter_params = data.get('filter', None)
+        region_params = data.get('region', {'x': 0, 'y': 0, 'width': 1.0, 'height': 1.0, 'type': 'inner'})
 
         if not weights_a and not weights_b:
             return JsonResponse({'error': 'No weights provided'}, status=400)
 
-        # Perform mixing
-        output_image = viewer.mix_images(modes, weights_a, weights_b, filter_params)
+        # Perform mixing with unified Region Model
+        output_image = viewer.mix_images(modes, weights_a, weights_b, region_params)
         img_base64 = viewer.image_to_base64(output_image)
 
         return JsonResponse({

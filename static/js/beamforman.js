@@ -1,6 +1,6 @@
 /**
- * Beamforming Simulator - CORRECTED PHYSICS
- * Now matches PyQt5 implementation with proper wave propagation
+ * Beamforming Simulator - ENHANCED VISUALIZATION
+ * Improved clarity and frequency control
  */
 
 class BeamformingSimulator {
@@ -17,7 +17,7 @@ class BeamformingSimulator {
             extentY: 20
         };
 
-        this.freqLimits = { min: 1e9, max: 3e9, step: 1e8 };
+        this.freqLimits = { min: 100, max: 5e9, step: 1e6 };
         this.activeScenario = null;
         this.activeScenarioName = 'No Scenario Loaded';
         this.antennas = [];
@@ -215,10 +215,27 @@ class BeamformingSimulator {
         this.antennas.forEach((ant, idx) => {
             const div = document.createElement('div');
             div.className = 'freq-row';
+
+            // Format frequency display based on magnitude
+            let freqDisplay, freqUnit;
+            if (ant.freq >= 1e9) {
+                freqDisplay = (ant.freq / 1e9).toFixed(3);
+                freqUnit = 'GHz';
+            } else if (ant.freq >= 1e6) {
+                freqDisplay = (ant.freq / 1e6).toFixed(2);
+                freqUnit = 'MHz';
+            } else if (ant.freq >= 1e3) {
+                freqDisplay = (ant.freq / 1e3).toFixed(1);
+                freqUnit = 'kHz';
+            } else {
+                freqDisplay = ant.freq.toFixed(0);
+                freqUnit = 'Hz';
+            }
+
             div.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center mb-1">
                     <small class="text-secondary">Antenna ${idx + 1}</small>
-                    <small class="text-accent monospace"><span id="freqVal${idx}">${(ant.freq / 1e9).toFixed(2)}</span> GHz</small>
+                    <small class="text-accent monospace"><span id="freqVal${idx}">${freqDisplay}</span> ${freqUnit}</small>
                 </div>
                 <input type="range" class="form-range freq-slider" 
                        data-index="${idx}" 
@@ -235,7 +252,25 @@ class BeamformingSimulator {
                 const idx = parseInt(e.target.dataset.index);
                 const val = parseFloat(e.target.value);
                 this.antennas[idx].freq = val;
-                document.getElementById(`freqVal${idx}`).innerText = (val / 1e9).toFixed(2);
+
+                // Update display with appropriate units
+                const freqSpan = document.getElementById(`freqVal${idx}`);
+                let freqDisplay, freqUnit;
+                if (val >= 1e9) {
+                    freqDisplay = (val / 1e9).toFixed(3);
+                    freqUnit = 'GHz';
+                } else if (val >= 1e6) {
+                    freqDisplay = (val / 1e6).toFixed(2);
+                    freqUnit = 'MHz';
+                } else if (val >= 1e3) {
+                    freqDisplay = (val / 1e3).toFixed(1);
+                    freqUnit = 'kHz';
+                } else {
+                    freqDisplay = val.toFixed(0);
+                    freqUnit = 'Hz';
+                }
+                freqSpan.innerText = freqDisplay;
+                freqSpan.parentElement.innerHTML = `<span id="freqVal${idx}">${freqDisplay}</span> ${freqUnit}`;
 
                 this.scheduleSmoothUpdate();
             });
@@ -271,7 +306,7 @@ class BeamformingSimulator {
 
         const zData = [];
 
-        // CORRECTED: Near-field calculation matching PyQt5
+        // ENHANCED: Near-field calculation with better normalization
         for (let r = 0; r < size; r++) {
             const yPos = this.yGrid[r];
             const row = [];
@@ -289,14 +324,20 @@ class BeamformingSimulator {
                     const dy = yPos - ant.y;
                     const R = Math.sqrt(dx * dx + dy * dy);
 
+                    // Avoid singularity at antenna position
+                    const safeR = Math.max(R, 0.001);
+
                     // Phase delay from steering
                     const phaseDelay = -i * delayRad;
 
-                    // CORRECTED: Frequency normalization
+                    // Frequency normalization
                     const freqScaling = freq / maxFreq;
 
-                    // CORRECTED: Wave superposition with proper scaling
-                    waveSum += freqScaling * Math.sin(k * R + phaseDelay);
+                    // ENHANCED: Amplitude decay with distance for realistic propagation
+                    const amplitude = 1.0 / Math.sqrt(safeR);
+
+                    // Wave superposition
+                    waveSum += freqScaling * amplitude * Math.cos(k * safeR + phaseDelay);
                 }
 
                 row.push(waveSum);
@@ -304,10 +345,15 @@ class BeamformingSimulator {
             zData.push(row);
         }
 
-        // CORRECTED: Apply logarithmic scaling like PyQt5
+        // ENHANCED: Better normalization for clearer visualization
         const zFlat = zData.flat();
         const wavesAbs = zFlat.map(v => Math.abs(v));
-        const wavesLog = wavesAbs.map(v => Math.log1p(v * 100));
+
+        // Use power scaling for better contrast
+        const wavesPower = wavesAbs.map(v => v * v);
+
+        // Apply moderate log scaling (less aggressive than before)
+        const wavesLog = wavesPower.map(v => Math.log1p(v * 10));
 
         const minLog = Math.min(...wavesLog);
         const maxLog = Math.max(...wavesLog);
@@ -318,13 +364,16 @@ class BeamformingSimulator {
         for (let r = 0; r < size; r++) {
             const row = [];
             for (let c = 0; c < size; c++) {
-                row.push((wavesLog[idx] - minLog) / range);
+                // Apply gamma correction for better visibility
+                const normalized = (wavesLog[idx] - minLog) / range;
+                const gammaCorrected = Math.pow(normalized, 0.5); // Gamma = 0.5 for brightness
+                row.push(gammaCorrected);
                 idx++;
             }
             normData.push(row);
         }
 
-        // CORRECTED: Array Factor calculation for polar plot
+        // Array Factor calculation for polar plot
         const beamAngles = [];
         const beamMags = [];
 
@@ -343,7 +392,7 @@ class BeamformingSimulator {
                 const r = Math.sqrt(ant.x ** 2 + ant.y ** 2);
                 const theta = Math.atan2(ant.y, ant.x);
 
-                // CORRECTED: Array Factor with frequency scaling
+                // Array Factor with frequency scaling
                 const freqScaling = freq / maxFreq;
                 const phaseTerm = -k * r * Math.cos(azimuthRad - theta) + (-i * delayRad);
 
@@ -609,13 +658,13 @@ class BeamformingSimulator {
         }
 
         if (type === '5g') {
-            // CORRECTED: Use speed of light for 5G
+            // 5G: 100 Hz to 5 GHz range with fine control
             this.config.speed = 3e8;
-            this.freqLimits = { min: 2e9, max: 3e9, step: 1e8 };
+            this.freqLimits = { min: 100, max: 5e9, step: 1e7 }; // 10 MHz steps
             this.config.extentX = 10;
             this.config.extentY = 20;
             this.config.numAntennas = 4;
-            this.config.distance = 0.06;  // 6cm spacing (typical for 2.5GHz)
+            this.config.distance = 0.06;
             this.config.geometry = 'Linear';
             this.config.delayDeg = 0;
             this.config.curvature = 0;
@@ -623,13 +672,13 @@ class BeamformingSimulator {
             this.activeScenarioName = '5G Beamforming';
 
         } else if (type === 'tumor') {
-            // CORRECTED: Use speed of sound in tissue for ultrasound
+            // Tumor Ablation: 100 Hz to 10 MHz (ultrasound range)
             this.config.speed = 1500;
-            this.freqLimits = { min: 4e6, max: 5e6, step: 1e5 };
+            this.freqLimits = { min: 100, max: 10e6, step: 1e4 }; // 10 kHz steps
             this.config.extentX = 10;
             this.config.extentY = 20;
             this.config.numAntennas = 10;
-            this.config.distance = 0.3;  // 30cm spacing
+            this.config.distance = 0.3;
             this.config.geometry = 'Curved';
             this.config.curvature = 24;
             this.config.delayDeg = 0;
@@ -637,13 +686,13 @@ class BeamformingSimulator {
             this.activeScenarioName = 'Tumor Ablation';
 
         } else if (type === 'ultrasound') {
-            // CORRECTED: Use speed of sound in tissue
+            // Ultrasound Imaging: 100 Hz to 5 MHz
             this.config.speed = 1500;
-            this.freqLimits = { min: 1e6, max: 2e6, step = 1e5 };
+            this.freqLimits = { min: 100, max: 5e6, step: 1e4 }; // 10 kHz steps
             this.config.extentX = 10;
             this.config.extentY = 20;
             this.config.numAntennas = 7;
-            this.config.distance = 0.4;  // 40cm spacing
+            this.config.distance = 0.4;
             this.config.geometry = 'Linear';
             this.config.delayDeg = 0;
             this.config.curvature = 0;

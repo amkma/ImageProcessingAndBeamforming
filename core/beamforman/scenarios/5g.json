@@ -2,8 +2,16 @@
     "name": "5G Beamforming",
     "geometry": "linear",
     "num_elements": 4,
-    "element_spacing": 1,
+    "element_spacing": 0.06,
     "frequency": 2500000000.0,
-    "steering_angle": 180.0,
-    "curvature": 0.0
+    "propagation_speed": 300000000.0,
+    "steering_angle": 0.0,
+    "curvature": 0.0,
+    "position": [0.0, 0.0],
+    "rotation": 0.0,
+    "focus_distance": 5.0,
+    "beam_width": 30.0,
+    "phase_profile": "linear",
+    "phase_slope": 0.0,
+    "apply_delays": false
 }

@@ -2,8 +2,16 @@
     "name": "Ultrasound Imaging",
     "geometry": "linear",
     "num_elements": 7,
-    "element_spacing": 4,
+    "element_spacing": 0.4,
     "frequency": 1000000.0,
+    "propagation_speed": 1500.0,
     "curvature": 0.0,
-    "steering_angle": 0.0
+    "steering_angle": 0.0,
+    "position": [0.0, 0.0],
+    "rotation": 0.0,
+    "focus_distance": 5.0,
+    "beam_width": 30.0,
+    "phase_profile": "linear",
+    "phase_slope": 0.0,
+    "apply_delays": false
 }

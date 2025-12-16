@@ -608,3 +608,7 @@ def get_status(request):
         })
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
+
+
+def beamforming(request):
+    return render(request, 'beamforman.html')

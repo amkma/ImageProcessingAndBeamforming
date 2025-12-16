@@ -1,6 +1,7 @@
 /**
  * Pure Client-Side Beamforming Simulator
  * All calculations done in browser - No backend required
+ * MODIFIED: Added λ-based spacing mode with automatic λ/2 calculation
  */
 
 class BeamformingSimulator {
@@ -15,7 +16,8 @@ class BeamformingSimulator {
                 curvature: 0,
                 frequencies: [2500000000, 2500000000, 2500000000, 2500000000],
                 propagation_speed: 300000000,
-                freqRange: { min: 1000000000, max: 5000000000, step: 10000000 }
+                freqRange: { min: 1000000000, max: 5000000000, step: 10000000 },
+                spacing_mode: 'absolute' // NEW: default mode
             },
             'ultrasound': {
                 num_antennas: 7,
@@ -25,7 +27,8 @@ class BeamformingSimulator {
                 array_geometry: 'Linear',
                 curvature: 0,
                 propagation_speed: 120000,
-                freqRange: { min: 100000, max: 5000000, step: 10000 }
+                freqRange: { min: 100000, max: 5000000, step: 10000 },
+                spacing_mode: 'absolute'
             },
             'tumor': {
                 num_antennas: 10,
@@ -35,7 +38,8 @@ class BeamformingSimulator {
                 array_geometry: 'Curved',
                 curvature: 0.24,
                 propagation_speed: 540000,
-                freqRange: { min: 1000000, max: 10000000, step: 50000 }
+                freqRange: { min: 1000000, max: 10000000, step: 50000 },
+                spacing_mode: 'absolute'
             }
         };
 
@@ -56,7 +60,9 @@ class BeamformingSimulator {
             extentX: 10,
             extentY: 20,
             activeScenario: null,
-            activeScenarioName: 'Custom'
+            activeScenarioName: 'Custom',
+            spacingMode: 'absolute', // NEW: 'absolute' or 'lambda'
+            lambdaMultiplier: 0.5 // NEW: for λ/2 spacing
         };
 
         this.updateTimer = null;
@@ -72,6 +78,7 @@ class BeamformingSimulator {
         this.attachEventListeners();
         this.refreshUI();
         this.updateModeIndicator();
+        this.updateSpacingDisplay(); // NEW
 
         setTimeout(() => {
             this.fullUpdate();
@@ -86,9 +93,45 @@ class BeamformingSimulator {
         });
     }
 
+    // NEW: Calculate wavelength based on average frequency
+    getAverageWavelength() {
+        const avgFreq = this.state.antennaFrequencies.slice(0, this.state.numAntennas)
+            .reduce((a, b) => a + b, 0) / this.state.numAntennas;
+        return this.state.propagationSpeed / avgFreq;
+    }
+
+    // NEW: Get effective spacing based on mode
+    getEffectiveSpacing() {
+        if (this.state.spacingMode === 'lambda') {
+            const lambda = this.getAverageWavelength();
+            return lambda * this.state.lambdaMultiplier;
+        }
+        return this.state.distance;
+    }
+
+    // NEW: Update spacing display text
+    updateSpacingDisplay() {
+        const distanceValue = document.getElementById('distanceValue');
+        const spacingInfo = document.getElementById('spacingInfo');
+
+        if (this.state.spacingMode === 'lambda') {
+            const lambda = this.getAverageWavelength();
+            const effectiveSpacing = lambda * this.state.lambdaMultiplier;
+            distanceValue.textContent = `${this.state.lambdaMultiplier.toFixed(2)}λ`;
+            spacingInfo.innerHTML = `<small class="text-secondary" style="font-size: 0.65rem;">
+                λ = ${(lambda * 1000).toFixed(2)} mm | Actual: ${(effectiveSpacing * 1000).toFixed(2)} mm
+            </small>`;
+        } else {
+            distanceValue.textContent = this.state.distance.toFixed(2);
+            spacingInfo.innerHTML = `<small class="text-secondary" style="font-size: 0.65rem;">
+                Range: 0.1m - 5.0m (10cm to 5 meters)
+            </small>`;
+        }
+    }
+
     resetAntennas() {
         const N = this.state.numAntennas;
-        const spacing = this.state.distance;
+        const spacing = this.getEffectiveSpacing(); // MODIFIED: use effective spacing
         const totalWidth = (N - 1) * spacing;
 
         this.state.antennaPositions = [];
@@ -144,7 +187,7 @@ class BeamformingSimulator {
             x: [0],
             y: [0],
             type: 'heatmap',
-            colorscale: 'Jet',
+            colorscale: 'Electric',
             zsmooth: 'best',
             showscale: true,
             zauto: false,
@@ -540,6 +583,12 @@ class BeamformingSimulator {
                 freqSpan.innerText = freqDisplay;
                 freqSpan.parentElement.innerHTML = `<span id="freqVal${idx}">${freqDisplay}</span> ${freqUnit}`;
 
+                // NEW: Update spacing display when frequency changes in lambda mode
+                if (this.state.spacingMode === 'lambda') {
+                    this.updateSpacingDisplay();
+                    this.resetAntennas();
+                }
+
                 this.scheduleSmoothUpdate();
             });
         });
@@ -612,12 +661,22 @@ class BeamformingSimulator {
         this.state.antennaFrequencies = [...scenario.frequencies];
         this.state.activeScenario = type;
         this.state.activeScenarioName = type.charAt(0).toUpperCase() + type.slice(1);
+        this.state.spacingMode = scenario.spacing_mode || 'absolute'; // NEW
 
         document.getElementById('numElements').value = this.state.numAntennas;
         document.getElementById('numElementsValue').textContent = this.state.numAntennas;
 
+        // NEW: Update spacing mode radio buttons
+        if (this.state.spacingMode === 'lambda') {
+            document.getElementById('spacingModeLambda').checked = true;
+            this.updateSpacingSliderForLambda();
+        } else {
+            document.getElementById('spacingModeAbsolute').checked = true;
+            this.updateSpacingSliderForAbsolute();
+        }
+
         document.getElementById('distance').value = this.state.distance;
-        document.getElementById('distanceValue').textContent = this.state.distance.toFixed(2);
+        this.updateSpacingDisplay(); // NEW
 
         document.getElementById('geometry').value = this.state.arrayGeometry;
 
@@ -637,6 +696,24 @@ class BeamformingSimulator {
         setTimeout(() => {
             this.fullUpdate();
         }, 50);
+    }
+
+    // NEW: Update distance slider for lambda mode
+    updateSpacingSliderForLambda() {
+        const slider = document.getElementById('distance');
+        slider.min = 0.1;
+        slider.max = 2.0;
+        slider.step = 0.01;
+        slider.value = this.state.lambdaMultiplier;
+    }
+
+    // NEW: Update distance slider for absolute mode
+    updateSpacingSliderForAbsolute() {
+        const slider = document.getElementById('distance');
+        slider.min = 0.1;
+        slider.max = 5.0;
+        slider.step = 0.1;
+        slider.value = this.state.distance;
     }
 
     attachEventListeners() {
@@ -664,15 +741,47 @@ class BeamformingSimulator {
             this.scheduleHeavyUpdate();
         });
 
+        // MODIFIED: Distance slider now handles both modes
         const distanceSlider = document.getElementById('distance');
         distanceSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
-            this.state.distance = val;
-            document.getElementById('distanceValue').innerText = val.toFixed(2);
 
+            if (this.state.spacingMode === 'lambda') {
+                this.state.lambdaMultiplier = val;
+            } else {
+                this.state.distance = val;
+            }
+
+            this.updateSpacingDisplay();
             this.resetAntennas();
             this.updatePositionSliders();
             this.scheduleSmoothUpdate();
+        });
+
+        // NEW: Spacing mode radio buttons
+        const spacingModeAbsolute = document.getElementById('spacingModeAbsolute');
+        const spacingModeLambda = document.getElementById('spacingModeLambda');
+
+        spacingModeAbsolute.addEventListener('change', () => {
+            if (spacingModeAbsolute.checked) {
+                this.state.spacingMode = 'absolute';
+                this.updateSpacingSliderForAbsolute();
+                this.updateSpacingDisplay();
+                this.resetAntennas();
+                this.updatePositionSliders();
+                this.scheduleSmoothUpdate();
+            }
+        });
+
+        spacingModeLambda.addEventListener('change', () => {
+            if (spacingModeLambda.checked) {
+                this.state.spacingMode = 'lambda';
+                this.updateSpacingSliderForLambda();
+                this.updateSpacingDisplay();
+                this.resetAntennas();
+                this.updatePositionSliders();
+                this.scheduleSmoothUpdate();
+            }
         });
 
         const curvatureSlider = document.getElementById('curvature');

@@ -673,26 +673,26 @@ class BeamformingSimulator {
 
         } else if (type === 'tumor') {
             // Tumor Ablation: 100 Hz to 10 MHz (ultrasound range)
-            this.config.speed = 1500;
-            this.freqLimits = { min: 100, max: 10e6, step: 1e4 }; // 10 kHz steps
+            this.config.speed = 3e8;
+            this.freqLimits = {  min: 100, max: 5e9, step: 1e7  }; // 10 kHz steps
             this.config.extentX = 10;
             this.config.extentY = 20;
-            this.config.numAntennas = 10;
-            this.config.distance = 0.3;
-            this.config.geometry = 'Curved';
-            this.config.curvature = 24;
+            this.config.numAntennas = 4;
+            this.config.distance = 0.06;
+            this.config.geometry = 'Linear';
+            this.config.curvature = 0;
             this.config.delayDeg = 0;
             this.activeScenario = 'tumor';
             this.activeScenarioName = 'Tumor Ablation';
 
         } else if (type === 'ultrasound') {
             // Ultrasound Imaging: 100 Hz to 5 MHz
-            this.config.speed = 1500;
-            this.freqLimits = { min: 100, max: 5e6, step: 1e4 }; // 10 kHz steps
+            this.config.speed = 3e8;
+            this.freqLimits = {  min: 100, max: 5e9, step: 1e7 }; // 10 kHz steps
             this.config.extentX = 10;
             this.config.extentY = 20;
-            this.config.numAntennas = 7;
-            this.config.distance = 0.4;
+            this.config.numAntennas = 4;
+            this.config.distance = 0.06;
             this.config.geometry = 'Linear';
             this.config.delayDeg = 0;
             this.config.curvature = 0;

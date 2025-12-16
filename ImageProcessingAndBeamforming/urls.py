@@ -23,7 +23,7 @@ urlpatterns = [
     path('api/status/', views.get_status, name='get_status'),
 
     # Beamforming Simulator URLs (Pure Frontend - No Backend)
-    path('beamforming/', views.beamforming, name='beamforming'),
+    # path('beamforming/', views.beamforming, name='beamforming'),
 ]
 
 # Add static and media files serving in development mode

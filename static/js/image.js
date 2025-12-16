@@ -60,6 +60,7 @@ const state = {
             height: 0.5   // Normalized height (0-1)
         }
     },
+    savedRectangle: null, // Preserves rectangle coordinates when switching to "all regions"
     rectangleDragState: null
 };
 
@@ -1062,6 +1063,12 @@ function initializeFilterControls() {
     filterInner.addEventListener('change', () => {
         if (filterInner.checked) {
             state.filter.mode = 'inner';
+            // Restore saved rectangle if switching from "all regions"
+            if (state.savedRectangle) {
+                state.filter.rect = { ...state.savedRectangle };
+                state.savedRectangle = null;
+                updateAllRectangles();
+            }
             updateFilterMode();
         }
     });
@@ -1069,12 +1076,20 @@ function initializeFilterControls() {
     filterOuter.addEventListener('change', () => {
         if (filterOuter.checked) {
             state.filter.mode = 'outer';
+            // Restore saved rectangle if switching from "all regions"
+            if (state.savedRectangle) {
+                state.filter.rect = { ...state.savedRectangle };
+                state.savedRectangle = null;
+                updateAllRectangles();
+            }
             updateFilterMode();
         }
     });
     
     filterAll.addEventListener('change', () => {
         if (filterAll.checked) {
+            // Save current rectangle before switching to full spectrum
+            state.savedRectangle = { ...state.filter.rect };
             // Set to full spectrum: entire frequency domain
             state.filter.mode = 'inner';
             state.filter.rect = {
@@ -1299,16 +1314,25 @@ function handleRectangleResize(e) {
 function handleRectangleEnd() {
     if (state.rectangleDragState) {
         const rect = document.getElementById(`filter-rect-${state.rectangleDragState.sourceIndex}`);
-        rect.classList.remove('dragging');
+        if (rect) {
+            rect.classList.remove('dragging');
+        }
         
         // Auto-switch from "all regions" to "inner" if user manually adjusts rectangle
-        const filterAll = document.getElementById('filter-all');
-        if (filterAll && filterAll.checked) {
-            const filterInner = document.getElementById('filter-inner');
-            if (filterInner) {
-                filterInner.checked = true;
-                state.filter.mode = 'inner';
+        const filterAll = document.querySelector('#filter-all');
+        const filterInner = document.querySelector('#filter-inner');
+        if (filterAll && filterAll.checked && filterInner) {
+            filterInner.checked = true;
+            state.filter.mode = 'inner';
+            // Restore saved rectangle if it exists
+            if (state.savedRectangle) {
+                state.filter.rect = { ...state.savedRectangle };
+                state.savedRectangle = null;
+                updateAllRectangles();
             }
+            // Trigger change event for consistency
+            const changeEvent = new Event('change', { bubbles: true });
+            filterInner.dispatchEvent(changeEvent);
         }
         
         state.rectangleDragState = null;

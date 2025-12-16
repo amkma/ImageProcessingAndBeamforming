@@ -1054,9 +1054,10 @@ function initializeButtons() {
 
 // Frequency Filter Controls
 function initializeFilterControls() {
-    // Filter mode toggle (inner/outer)
+    // Filter mode toggle (inner/outer/all)
     const filterInner = document.getElementById('filter-inner');
     const filterOuter = document.getElementById('filter-outer');
+    const filterAll = document.getElementById('filter-all');
     
     filterInner.addEventListener('change', () => {
         if (filterInner.checked) {
@@ -1068,6 +1069,21 @@ function initializeFilterControls() {
     filterOuter.addEventListener('change', () => {
         if (filterOuter.checked) {
             state.filter.mode = 'outer';
+            updateFilterMode();
+        }
+    });
+    
+    filterAll.addEventListener('change', () => {
+        if (filterAll.checked) {
+            // Set to full spectrum: entire frequency domain
+            state.filter.mode = 'inner';
+            state.filter.rect = {
+                x: 0,
+                y: 0,
+                width: 1.0,
+                height: 1.0
+            };
+            updateAllRectangles();
             updateFilterMode();
         }
     });
@@ -1284,6 +1300,17 @@ function handleRectangleEnd() {
     if (state.rectangleDragState) {
         const rect = document.getElementById(`filter-rect-${state.rectangleDragState.sourceIndex}`);
         rect.classList.remove('dragging');
+        
+        // Auto-switch from "all regions" to "inner" if user manually adjusts rectangle
+        const filterAll = document.getElementById('filter-all');
+        if (filterAll && filterAll.checked) {
+            const filterInner = document.getElementById('filter-inner');
+            if (filterInner) {
+                filterInner.checked = true;
+                state.filter.mode = 'inner';
+            }
+        }
+        
         state.rectangleDragState = null;
     }
     

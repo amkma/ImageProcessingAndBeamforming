@@ -20,6 +20,11 @@ def image(request):
     return render(request, 'image.html')
 
 
+def beamforming(request):
+    """Serve beamforming simulator page (Pure Frontend)."""
+    return render(request, 'beamforman.html')
+
+
 @csrf_exempt
 def upload_image(request):
     """

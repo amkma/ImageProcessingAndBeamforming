@@ -1,4 +1,28 @@
-// Global state
+/**
+ * ImageMixer - Fourier Transform-based Image Processing Application
+ * 
+ * Architecture:
+ * - Centralized state management for all application data
+ * - Event-driven UI interactions with drag-based adjustments
+ * - Real-time FFT component visualization
+ * - Frequency domain filtering with visual rectangle overlay
+ * - Per-image mixing mode selection (magnitude/phase or real/imaginary)
+ */
+
+/**
+ * Application State
+ * Centralized state object containing all runtime data:
+ * - images: Base64-encoded grayscale images for 4 input slots
+ * - adjustments: Display-only brightness/contrast for input viewports (does not affect FFT)
+ * - outputAdjustments: Client-side brightness/contrast for output viewports
+ * - mixingModes: Per-image mode selection ('magnitude_phase' or 'real_imaginary')
+ * - weightsA/B: Slider weights for component A (Mag/Real) and B (Phase/Imag)
+ * - selectedOutput: Which output viewport (1 or 2) receives mixed results
+ * - pendingRequest: AbortController for canceling in-flight API requests
+ * - dragState: Active drag operation state for input viewport adjustments
+ * - filter: Frequency domain filter configuration (rectangle coordinates and mode)
+ * - rectangleDragState: Active drag operation for filter rectangle manipulation
+ */
 const state = {
     images: {
         img1: null,
@@ -28,21 +52,30 @@ const state = {
     pendingRequest: null,
     dragState: null,
     filter: {
-        mode: 'inner',
+        mode: 'inner', // 'inner' or 'outer' - determines whether rectangle includes or excludes frequencies
         rect: {
-            x: 0.25,
-            y: 0.25,
-            width: 0.5,
-            height: 0.5
+            x: 0.25,      // Normalized X position (0-1)
+            y: 0.25,      // Normalized Y position (0-1)
+            width: 0.5,   // Normalized width (0-1)
+            height: 0.5   // Normalized height (0-1)
         }
     },
-    rectangleDragState: null,
-    componentDragState: null
+    rectangleDragState: null
 };
 
-// Status indicator management
+/**
+ * Status Indicator Management
+ * Handles the floating status indicator UI element
+ */
 let statusTimeout = null;
 
+/**
+ * Show status indicator with message and type
+ * @param {string} message - Status message to display
+ * @param {string} type - Status type: 'loading' (spinner) or 'done' (checkmark)
+ * 
+ * Design: Auto-hides 'done' status after 2s, 'loading' stays until manually hidden
+ */
 function showStatus(message, type = 'loading') {
     const indicator = document.getElementById('status-indicator');
     const text = document.getElementById('status-text');
@@ -52,6 +85,7 @@ function showStatus(message, type = 'loading') {
     text.textContent = message;
     indicator.className = `status-indicator visible ${type}`;
     
+    // Auto-hide success messages
     if (type === 'done') {
         statusTimeout = setTimeout(() => {
             indicator.classList.remove('visible');
@@ -59,57 +93,109 @@ function showStatus(message, type = 'loading') {
     }
 }
 
+/**
+ * Hide status indicator immediately
+ */
 function hideStatus() {
     const indicator = document.getElementById('status-indicator');
     indicator.classList.remove('visible');
 }
 
-// Initialize on DOM load
+/**
+ * =============================================================================
+ * APPLICATION INITIALIZATION
+ * =============================================================================
+ */
+
+/**
+ * Main initialization - sets up all event listeners and UI components
+ * Executes after DOM is fully loaded to ensure all elements exist
+ */
 document.addEventListener('DOMContentLoaded', () => {
-    initializeFileInputs();
-    initializeViewportDrag();
-    initializeOutputViewportDrag();
-    initializeComponentViewportDrag();
-    initializeComponentSelects();
-    initializeMixingMode();
-    initializeSliders();
-    initializeButtons();
-    initializeOutputSelection();
-    initializeFilterControls();
+    initializeFileInputs();              // File upload handlers
+    initializeViewportDrag();            // Input viewport brightness/contrast drag
+    initializeOutputViewportDrag();      // Output viewport adjustment drag
+    initializeComponentSelects();        // FFT component dropdown menus
+    initializeMixingMode();              // Mixing mode dropdown handlers
+    initializeSliders();                 // Weight slider event handlers
+    initializeOutputSelection();         // Output viewport selection
+    initializeFilterControls();          // Frequency filter controls
 });
 
-// Handle window resize to keep rectangles synchronized
+/**
+ * Window resize handler - keeps filter rectangles synchronized across viewports
+ * Required because rectangles use pixel positioning that must recalculate on viewport size changes
+ */
 window.addEventListener('resize', () => {
     updateAllRectangles();
 });
 
-// Helper function to check if any images are loaded
+/**
+ * =============================================================================
+ * UTILITY FUNCTIONS
+ * =============================================================================
+ */
+
+/**
+ * Check if any images are currently loaded
+ * @returns {boolean} True if at least one image is loaded
+ */
 function hasLoadedImages() {
     return Object.values(state.images).some(img => img !== null);
 }
 
-// Helper function to get count of loaded images
+/**
+ * Get count of loaded images
+ * @returns {number} Number of non-null images in state
+ * @deprecated Not currently used - candidate for removal if not needed
+ */
 function getLoadedImageCount() {
     return Object.values(state.images).filter(img => img !== null).length;
 }
 
-// File Upload Handling
+/**
+ * =============================================================================
+ * FILE UPLOAD & IMAGE DISPLAY
+ * =============================================================================
+ */
+
+/**
+ * Initialize file upload event listeners for all 4 input viewports
+ * Design: Double-click viewport to trigger hidden file input
+ */
 function initializeFileInputs() {
     for (let i = 1; i <= 4; i++) {
         const viewport = document.getElementById(`input-viewport-${i}`);
         const fileInput = document.getElementById(`input-file-${i}`);
         
-        // Double-click to upload/change
+        // Double-click viewport triggers file picker
         viewport.addEventListener('dblclick', () => {
             fileInput.click();
         });
         
+        // Handle file selection
         fileInput.addEventListener('change', (e) => {
             handleFileUpload(e.target.files[0], `img${i}`, i);
         });
     }
 }
 
+/**
+ * Upload image file to backend and process
+ * Backend converts to grayscale, stores in session, pre-computes FFT
+ * 
+ * @param {File} file - Selected image file
+ * @param {string} imageKey - State key (img1-img4)
+ * @param {number} index - Viewport index (1-4)
+ * 
+ * Workflow:
+ * 1. Upload to /api/upload/ endpoint
+ * 2. Backend converts to grayscale and caches FFT components
+ * 3. Auto-resize all images to smallest dimensions (unified sizing)
+ * 4. Trigger FFT component preview update
+ * 5. Resize viewports to fit smallest image
+ * 6. Update filter rectangle visibility
+ */
 async function handleFileUpload(file, imageKey, index) {
     if (!file) return;
     
@@ -126,20 +212,20 @@ async function handleFileUpload(file, imageKey, index) {
         const data = await response.json();
         
         if (data.success) {
-            // Use the processed grayscale image from backend
+            // Store base64 grayscale image from backend
             state.images[imageKey] = data.grayscale_image;
             displayImage(`input-viewport-${index}`, data.grayscale_image);
             
-            // Auto-resize to smallest dimensions (enforces unified sizing)
+            // Enforce unified sizing across all images (backend operation)
             await autoResize();
             
-            // Update component preview after resize (triggers FFT recalculation)
+            // Update FFT component preview (triggers backend FFT calculation)
             updateComponentPreview(index);
             
-            // Resize all input viewports to smallest after upload completes
+            // Resize viewport containers to fit smallest image (UI operation)
             setTimeout(() => resizeAllInputViewportsToSmallest(), 100);
             
-            // Update filter rectangle visibility now that image is loaded
+            // Show/hide filter rectangles based on loaded images
             updateAllRectangles();
         }
     } catch (error) {
@@ -147,6 +233,14 @@ async function handleFileUpload(file, imageKey, index) {
     }
 }
 
+/**
+ * Display base64 image in specified viewport
+ * @param {string} viewportId - DOM element ID
+ * @param {string} imageSrc - Base64 image data URI
+ * 
+ * Design: Creates new img element to replace placeholder
+ * Triggers viewport resize on load for input viewports
+ */
 function displayImage(viewportId, imageSrc) {
     const viewport = document.getElementById(viewportId);
     viewport.innerHTML = '';
@@ -154,7 +248,7 @@ function displayImage(viewportId, imageSrc) {
     const img = document.createElement('img');
     img.src = imageSrc;
     
-    // When image loads, trigger resize for input viewports
+    // After image loads, resize input viewports to maintain uniform size
     img.onload = function() {
         if (viewportId.includes('input-viewport')) {
             resizeAllInputViewportsToSmallest();
@@ -164,16 +258,28 @@ function displayImage(viewportId, imageSrc) {
     viewport.appendChild(img);
 }
 
-// Resize all input viewports to fit smallest image with aspect ratio preserved
+/**
+ * Resize all input viewports to match smallest loaded image dimensions
+ * Maintains aspect ratio and enforces 200px maximum size
+ * 
+ * Purpose: Ensures visual consistency across all input viewports
+ * All images are displayed at the same viewport size regardless of original dimensions
+ * 
+ * Algorithm:
+ * 1. Find smallest naturalWidth/Height across all loaded images
+ * 2. Calculate aspect ratio from smallest image
+ * 3. Scale to fit within 200x200px box while preserving aspect ratio
+ * 4. Apply dimensions to all 4 input viewport containers
+ */
 function resizeAllInputViewportsToSmallest() {
     const inputViewports = [
-        { id: 'input-viewport-1', img: null },
-        { id: 'input-viewport-2', img: null },
-        { id: 'input-viewport-3', img: null },
-        { id: 'input-viewport-4', img: null }
+        { id: 'input-viewport-1' },
+        { id: 'input-viewport-2' },
+        { id: 'input-viewport-3' },
+        { id: 'input-viewport-4' }
     ];
     
-    // Collect all loaded images from input viewports
+    // Find smallest dimensions across all loaded images
     let minWidth = Infinity;
     let minHeight = Infinity;
     let hasAnyImage = false;
@@ -189,47 +295,66 @@ function resizeAllInputViewportsToSmallest() {
         }
     });
     
-    if (!hasAnyImage) return;
+    if (!hasAnyImage) return; // No images loaded yet
     
     // Calculate aspect ratio from smallest image
     const aspectRatio = minWidth / minHeight;
-    const maxSize = 200;
+    const maxSize = 200; // Maximum viewport dimension
     
     let finalWidth, finalHeight;
     
-    // Fit within 200x200 while preserving aspect ratio
+    // Scale to fit within 200x200 while preserving aspect ratio
     if (aspectRatio > 1) {
-        // Wider than tall
+        // Landscape orientation
         finalWidth = maxSize;
         finalHeight = Math.round(maxSize / aspectRatio);
     } else {
-        // Taller than wide
+        // Portrait orientation
         finalHeight = maxSize;
         finalWidth = Math.round(maxSize * aspectRatio);
     }
     
-    // Apply calculated dimensions to all input viewports
+    // Apply calculated dimensions to all input viewport containers
     inputViewports.forEach(viewport => {
         const element = document.getElementById(viewport.id);
         if (element) {
-            element.style.width = finalWidth + 'px';
-            element.style.height = finalHeight + 'px';
+            element.style.width = `${finalWidth}px`;
+            element.style.height = `${finalHeight}px`;
         }
     });
 }
 
-// Mouse Drag for Brightness/Contrast Adjustments
+/**
+ * =============================================================================
+ * INPUT VIEWPORT BRIGHTNESS/CONTRAST ADJUSTMENTS
+ * =============================================================================
+ */
+
+/**
+ * Initialize drag-based brightness/contrast adjustments for input viewports
+ * 
+ * Interaction Model:
+ * - Mouse drag up/down: Adjust brightness (0.0 to 2.0)
+ * - Mouse drag left/right: Adjust contrast (0.0 to 3.0)
+ * 
+ * Design: Display-only adjustments (does NOT affect FFT calculations)
+ * Backend always uses original unmodified images for frequency domain operations
+ */
 function initializeViewportDrag() {
     for (let i = 1; i <= 4; i++) {
         const viewport = document.getElementById(`input-viewport-${i}`);
         const imageKey = `img${i}`;
         
         viewport.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return; // Left button only
+            // Only respond to left mouse button
+            if (e.button !== 0) return;
+            
+            // Only allow drag if image is loaded
             if (!state.images[imageKey]) return;
             
             e.preventDefault();
             
+            // Initialize drag state with current adjustment values
             state.dragState = {
                 viewport: viewport,
                 imageKey: imageKey,
@@ -243,38 +368,66 @@ function initializeViewportDrag() {
             viewport.classList.add('dragging');
             showAdjustmentIndicator(state.dragState.initialBrightness, state.dragState.initialContrast);
             
+            // Attach global mouse move/up handlers for smooth dragging
             document.addEventListener('mousemove', handleDrag);
             document.addEventListener('mouseup', handleDragEnd);
         });
     }
 }
 
+/**
+ * Handle mouse move during brightness/contrast drag operation
+ * @param {MouseEvent} e - Mouse move event
+ * 
+ * Controls:
+ * - Vertical (Y-axis): Brightness adjustment
+ *   - Drag up: increase brightness (inversed for intuitive feel)
+ *   - Drag down: decrease brightness
+ *   - Range: 0.0 (black) to 2.0 (very bright)
+ *   - Sensitivity: 300px for full range
+ * 
+ * - Horizontal (X-axis): Contrast adjustment
+ *   - Drag right: increase contrast
+ *   - Drag left: decrease contrast
+ *   - Range: 0.0 (flat gray) to 3.0 (maximum contrast)
+ *   - Sensitivity: 300px for full range
+ */
 function handleDrag(e) {
     if (!state.dragState) return;
     
     const deltaX = e.clientX - state.dragState.startX;
     const deltaY = e.clientY - state.dragState.startY;
     
-    // Up/Down = Brightness (0.0 to 2.0)
-    // Drag up increases brightness, drag down decreases
+    // Calculate new brightness (inverted Y-axis for intuitive control)
     const brightness = state.dragState.initialBrightness - (deltaY / 300);
     const clampedBrightness = Math.max(0.0, Math.min(2.0, brightness));
     
-    // Left/Right = Contrast (0.0 to 3.0)
-    // Drag right increases contrast, drag left decreases
+    // Calculate new contrast
     const contrast = state.dragState.initialContrast + (deltaX / 300);
     const clampedContrast = Math.max(0.0, Math.min(3.0, contrast));
     
-    // Update state
+    // Update state with clamped values
     state.adjustments[state.dragState.imageKey] = {
         brightness: clampedBrightness,
         contrast: clampedContrast
     };
     
-    // Update indicator
+    // Update real-time visual indicator
     showAdjustmentIndicator(clampedBrightness, clampedContrast);
 }
 
+/**
+ * Finalize brightness/contrast adjustment on mouse release
+ * 
+ * Design Decision: Display-only adjustments
+ * - Sends adjustments to backend for image processing
+ * - Updates displayed image with adjusted version
+ * - Does NOT trigger FFT recalculation
+ * - Backend FFT operations always use original unmodified images
+ * 
+ * Rationale: Separates visual presentation from frequency domain calculations
+ * Users can adjust display for better visibility without affecting mix results
+ */
 async function handleDragEnd() {
     if (!state.dragState) return;
     
@@ -284,15 +437,13 @@ async function handleDragEnd() {
     
     state.dragState.viewport.classList.remove('dragging');
     
-    // Hide indicator after half a second
+    // Auto-hide adjustment indicator
     setTimeout(() => {
         hideAdjustmentIndicator();
     }, 500);
     
-    // Apply adjustments to backend
+    // Apply display-only adjustments via backend
     try {
-        showStatus('Applying adjustments...', 'loading');
-        
         const response = await fetch('/api/apply-adjustments/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -300,62 +451,64 @@ async function handleDragEnd() {
                 image_key: imageKey,
                 brightness: adjustments.brightness,
                 contrast: adjustments.contrast,
-                reference: 'original'
+                reference: 'original' // Always reference original image
             })
         });
         
         const data = await response.json();
         
         if (data.success) {
-            // Update state with backend-validated values
-            state.adjustments[imageKey] = {
-                brightness: data.applied_brightness,
-                contrast: data.applied_contrast
-            };
-            
-            // Update displayed image with backend-processed version
+            // Update displayed image (visual only)
             state.images[imageKey] = data.adjusted_image;
             displayImage(`input-viewport-${index}`, data.adjusted_image);
             
-            // Recalculate and cache FFT after brightness/contrast adjustment
-            updateComponentPreview(index);
-            
-            // Ensure filter rectangles remain visible
+            // Refresh filter rectangle positioning
             setTimeout(() => {
                 updateAllRectangles();
             }, 100);
-            
-            showStatus('Adjustments applied', 'done');
-        } else {
-            showStatus('Failed: ' + data.error, 'done');
         }
     } catch (error) {
         console.error('Failed to apply adjustments:', error);
-        showStatus('Error applying adjustments', 'done');
     }
     
-    // Clean up drag state
+    // Clean up drag state and remove global listeners
     state.dragState = null;
     document.removeEventListener('mousemove', handleDrag);
     document.removeEventListener('mouseup', handleDragEnd);
 }
 
-// Initialize Output Viewport Drag for Brightness/Contrast
+/**
+ * =============================================================================
+ * OUTPUT VIEWPORT BRIGHTNESS/CONTRAST ADJUSTMENTS
+ * =============================================================================
+ */
+
+/**
+ * Initialize drag-based brightness/contrast for output viewports
+ * 
+ * Design: Client-side canvas-based adjustments
+ * - Preserves original mixed output in state[`originalOutput${i}`]
+ * - Applies adjustments via canvas manipulation
+ * - Does not send image data back to backend
+ * - Allows visual tuning of final output without remixing
+ */
 function initializeOutputViewportDrag() {
     for (let i = 1; i <= 2; i++) {
         const viewport = document.getElementById(`output-viewport-${i}`);
         const outputKey = `output${i}`;
         
         viewport.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return; // Left button only
+            // Only left mouse button
+            if (e.button !== 0) return;
             
-            // Check if there's an image in the output viewport
+            // Only allow adjustment if output image exists
             const img = viewport.querySelector('img');
             if (!img) return;
             
             e.preventDefault();
             e.stopPropagation();
             
+            // Initialize output drag state
             state.dragState = {
                 viewport: viewport,
                 outputKey: outputKey,
@@ -364,35 +517,48 @@ function initializeOutputViewportDrag() {
                 startY: e.clientY,
                 initialBrightness: state.outputAdjustments[outputKey].brightness,
                 initialContrast: state.outputAdjustments[outputKey].contrast,
-                isOutput: true
+                isOutput: true // Flag to distinguish from input viewport drag
             };
             
             viewport.classList.add('dragging');
             showAdjustmentIndicator(state.dragState.initialBrightness, state.dragState.initialContrast);
             
+            // Attach global handlers
             document.addEventListener('mousemove', handleOutputDrag);
             document.addEventListener('mouseup', handleOutputDragEnd);
         });
     }
 }
 
+/**
+ * Handle mouse move during output viewport brightness/contrast drag
+ * @param {MouseEvent} e - Mouse move event
+ * 
+ * Identical controls to input viewport drag:
+ * - Vertical: Brightness (0.0 - 2.0)
+ * - Horizontal: Contrast (0.0 - 3.0)
+ */
 function handleOutputDrag(e) {
     if (!state.dragState || !state.dragState.isOutput) return;
     
     const deltaX = e.clientX - state.dragState.startX;
     const deltaY = e.clientY - state.dragState.startY;
     
+    // Calculate and clamp brightness
     const brightness = state.dragState.initialBrightness - (deltaY / 300);
     const clampedBrightness = Math.max(0.0, Math.min(2.0, brightness));
     
+    // Calculate and clamp contrast
     const contrast = state.dragState.initialContrast + (deltaX / 300);
     const clampedContrast = Math.max(0.0, Math.min(3.0, contrast));
     
+    // Update output adjustment state
     state.outputAdjustments[state.dragState.outputKey] = {
         brightness: clampedBrightness,
         contrast: clampedContrast
     };
     
+    // Update real-time indicator
     showAdjustmentIndicator(clampedBrightness, clampedContrast);
 }
 
@@ -518,7 +684,22 @@ function handleComponentDragEnd() {
     // DISABLED - FT viewports should not have brightness/contrast adjustments
 }
 
-// Component Selection Dropdowns
+/**
+ * =============================================================================
+ * FFT COMPONENT VISUALIZATION
+ * =============================================================================
+ */
+
+/**
+ * Initialize FFT component selection dropdowns (Magnitude/Phase/Real/Imaginary)
+ * Each image has independent component display options
+ * 
+ * Purpose: Visualizes different FFT components for analysis
+ * - Magnitude: Shows frequency spectrum intensity (log-scaled)
+ * - Phase: Shows phase angle at each frequency
+ * - Real: Real part of complex FFT
+ * - Imaginary: Imaginary part of complex FFT
+ */
 function initializeComponentSelects() {
     for (let i = 1; i <= 4; i++) {
         const select = document.getElementById(`component-select-${i}`);
@@ -528,7 +709,27 @@ function initializeComponentSelects() {
     }
 }
 
-// Mixing Mode Selection
+/**
+ * =============================================================================
+ * MIXING MODE CONFIGURATION
+ * =============================================================================
+ */
+
+/**
+ * Initialize mixing mode dropdowns for each image
+ * 
+ * Modes:
+ * - magnitude_phase: Mix using magnitude and phase components
+ *   Component A (Slider A) = Magnitude
+ *   Component B (Slider B) = Phase
+ * 
+ * - real_imaginary: Mix using real and imaginary components
+ *   Component A (Slider A) = Real part
+ *   Component B (Slider B) = Imaginary part
+ * 
+ * Design: Per-image mode selection allows flexible hybrid mixing
+ * (e.g., Image 1 magnitude/phase + Image 2 real/imaginary)
+ */
 function initializeMixingMode() {
     for (let i = 1; i <= 4; i++) {
         const modeSelect = document.getElementById(`mode-select-${i}`);
@@ -539,11 +740,20 @@ function initializeMixingMode() {
             updateModeLabelsForImage(i, modeSelect.value);
         });
         
-        // Initialize labels
+        // Initialize labels on page load
         updateModeLabelsForImage(i, state.mixingModes[imageKey]);
     }
 }
 
+/**
+ * Update slider labels based on active mixing mode
+ * @param {number} index - Image index (1-4)
+ * @param {string} mode - Mixing mode ('magnitude_phase' or 'real_imaginary')
+ * 
+ * Updates UI labels to reflect current component meaning:
+ * - magnitude_phase: Slider A = "Mag", Slider B = "Phase"
+ * - real_imaginary: Slider A = "Real", Slider B = "Imag"
+ */
 function updateModeLabelsForImage(index, mode) {
     const labelA = document.getElementById(`label-a-${index}`);
     const labelB = document.getElementById(`label-b-${index}`);
@@ -557,9 +767,24 @@ function updateModeLabelsForImage(index, mode) {
     }
 }
 
+/**
+ * Update FFT component preview for specified image
+ * @param {number} index - Image index (1-4)
+ * 
+ * Workflow:
+ * 1. Fetch selected component (magnitude/phase/real/imaginary) from backend
+ * 2. Backend retrieves pre-computed FFT from cache
+ * 3. Display component visualization in component viewport
+ * 4. Reattach filter overlay rectangle
+ * 5. Update rectangle positioning
+ * 
+ * Design: Uses cached FFT data from backend for instant component switching
+ * No recalculation needed - FFT was pre-computed during image upload
+ */
 async function updateComponentPreview(index) {
     const imageKey = `img${index}`;
     
+    // Validate image is loaded
     if (!state.images[imageKey]) {
         console.warn(`Cannot update component preview - no image loaded for ${imageKey}`);
         return;
@@ -568,6 +793,8 @@ async function updateComponentPreview(index) {
     const component = document.getElementById(`component-select-${index}`).value;
     const viewport = document.getElementById(`component-viewport-${index}`);
     const overlay = document.getElementById(`filter-overlay-${index}`);
+    
+    // Temporarily remove overlay to replace viewport content
     const overlayParent = overlay.parentNode;
     overlayParent.removeChild(overlay);
     
@@ -579,16 +806,20 @@ async function updateComponentPreview(index) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 image_key: imageKey,
-                component: component
+                component: component // magnitude, phase, real, or imaginary
             })
         });
         
         const data = await response.json();
         
         if (data.success) {
+            // Display FFT component visualization
             displayImage(`component-viewport-${index}`, data.image);
+            
+            // Reattach filter overlay
             viewport.appendChild(overlay);
             
+            // Update filter rectangle positioning
             setTimeout(() => {
                 updateAllRectangles();
             }, 50);
@@ -602,40 +833,90 @@ async function updateComponentPreview(index) {
     }
 }
 
-// Slider Handling
+/**
+ * =============================================================================
+ * WEIGHT SLIDERS
+ * =============================================================================
+ */
+
+/**
+ * Initialize weight sliders for mixing control
+ * 
+ * Purpose: Controls how much each FFT component contributes to final mix
+ * - Each image has 2 sliders (Component A and Component B)
+ * - Slider meaning depends on current mixing mode:
+ *   - magnitude_phase mode: A = Magnitude weight, B = Phase weight
+ *   - real_imaginary mode: A = Real weight, B = Imaginary weight
+ * 
+ * Range: 0-100% (stored as 0.0-1.0 in state)
+ * 
+ * Design: Real-time state updates, mixing triggered manually via output viewport click
+ */
 function initializeSliders() {
     for (let i = 1; i <= 4; i++) {
         const imageKey = `img${i}`;
         
-        // Component A sliders
+        // Component A slider (Magnitude or Real)
         const sliderA = document.getElementById(`weight-a-${i}`);
         const valueA = document.getElementById(`weight-a-value-${i}`);
         
         sliderA.addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
             valueA.textContent = val;
-            state.weightsA[imageKey] = val / 100;
+            state.weightsA[imageKey] = val / 100; // Convert to 0.0-1.0 range
         });
         
-        // Component B sliders
+        // Component B slider (Phase or Imaginary)
         const sliderB = document.getElementById(`weight-b-${i}`);
         const valueB = document.getElementById(`weight-b-value-${i}`);
         
         sliderB.addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
             valueB.textContent = val;
-            state.weightsB[imageKey] = val / 100;
+            state.weightsB[imageKey] = val / 100; // Convert to 0.0-1.0 range
         });
     }
 }
 
-// Mixing only on explicit output viewport click - no auto-triggering
+/**
+ * =============================================================================
+ * IMAGE MIXING (INVERSE FFT)
+ * =============================================================================
+ */
 
+/**
+ * Perform frequency domain image mixing with Inverse FFT
+ * 
+ * Mixing Algorithm:
+ * 1. For each loaded image, extract FFT components based on its mode
+ * 2. Apply frequency domain mask (filter rectangle)
+ * 3. Weight components by slider values (weightsA and weightsB)
+ * 4. Accumulate weighted components across all images
+ * 5. Reconstruct complex FFT from accumulated components
+ * 6. Apply Inverse FFT to obtain spatial domain output
+ * 7. Display result in selected output viewport
+ * 
+ * Unified Region Model:
+ * - Always applies frequency mask based on filter rectangle
+ * - 'inner' mode: Keep frequencies inside rectangle
+ * - 'outer' mode: Keep frequencies outside rectangle
+ * - Full spectrum: rectangle covers entire frequency domain (default)
+ * 
+ * Design Decisions:
+ * - Manual trigger via output viewport double-click (no auto-update)
+ * - Cancellable via AbortController for rapid successive operations
+ * - Uses original unmodified images for FFT (ignores display adjustments)
+ * - Stores original output for brightness/contrast reset capability
+ * 
+ * Performance: Backend performs all FFT calculations using cached pre-computed data
+ */
 async function performMixing() {
+    // Cancel any pending mixing operation
     if (state.pendingRequest) {
         state.pendingRequest.abort();
     }
     
+    // Validate at least one image is loaded
     if (!hasLoadedImages()) {
         console.warn('Cannot perform mixing - no images loaded');
         showStatus('No images loaded', 'done');
@@ -645,29 +926,30 @@ async function performMixing() {
     
     showStatus('Computing IFFT...', 'loading');
     
+    // Create cancellable request
     const controller = new AbortController();
     state.pendingRequest = controller;
     
     try {
-        // Unified Region Model: always send region params
-        // Full spectrum mode: x=0, y=0, width=1.0, height=1.0, type='inner'
-        // Custom filter mode: use state.filter.rect values
+        // Build frequency filter parameters (Unified Region Model)
+        // Always includes region params - full spectrum or custom rectangle
         const regionParams = {
-            x: state.filter.rect.x,
-            y: state.filter.rect.y,
-            width: state.filter.rect.width,
-            height: state.filter.rect.height,
-            type: state.filter.mode
+            x: state.filter.rect.x,           // Normalized X (0-1)
+            y: state.filter.rect.y,           // Normalized Y (0-1)
+            width: state.filter.rect.width,   // Normalized width (0-1)
+            height: state.filter.rect.height, // Normalized height (0-1)
+            type: state.filter.mode           // 'inner' or 'outer'
         };
         
+        // Send mixing request to backend
         const response = await fetch('/api/mix/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                modes: state.mixingModes,
-                weights_a: state.weightsA,
-                weights_b: state.weightsB,
-                region: regionParams
+                modes: state.mixingModes,    // Per-image mode selection
+                weights_a: state.weightsA,   // Component A weights
+                weights_b: state.weightsB,   // Component B weights
+                region: regionParams         // Frequency filter configuration
             }),
             signal: controller.signal
         });
@@ -675,27 +957,30 @@ async function performMixing() {
         const data = await response.json();
         
         if (data.success) {
-            // Store original output and reset adjustments for selected output
+            // Preserve original output for adjustment operations
             state[`originalOutput${state.selectedOutput}`] = data.output_image;
+            
+            // Reset output adjustments to default
             state.outputAdjustments[`output${state.selectedOutput}`] = {
                 brightness: 1.0,
                 contrast: 1.0
             };
             
-            // Display in selected output
+            // Display mixed result in selected output viewport
             displayImage(`output-viewport-${state.selectedOutput}`, data.output_image);
             
-            // Show done status
             showStatus('Done', 'done');
         }
     } catch (error) {
         if (error.name === 'AbortError') {
+            // Request was cancelled - silent fail
             hideStatus();
         } else {
             console.error('Mixing failed:', error);
             hideStatus();
         }
     } finally {
+        // Clear pending request reference
         state.pendingRequest = null;
     }
 }

@@ -684,7 +684,7 @@ input[type=range]::-moz-range-thumb:hover {
     width: 100%;
     background-color: var(--theme-panel);
     border-bottom: 1px solid var(--theme-border);
-    position: fixed;
+    position: static;
     top: 0;
     left: 0;
     z-index: 1000;

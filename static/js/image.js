@@ -15,7 +15,7 @@
  * - images: Base64-encoded grayscale images for 4 input slots
  * - adjustments: Display-only brightness/contrast for input viewports (does not affect FFT)
  * - outputAdjustments: Client-side brightness/contrast for output viewports
- * - mixingModes: Per-image mode selection ('magnitude_phase' or 'real_imaginary')
+ * - mixingMode: Unified mode for all images ('magnitude_phase' or 'real_imaginary')
  * - weightsA/B: Slider weights for component A (Mag/Real) and B (Phase/Imag)
  * - selectedOutput: Which output viewport (1 or 2) receives mixed results
  * - pendingRequest: AbortController for canceling in-flight API requests
@@ -40,12 +40,7 @@ const state = {
         output1: { brightness: 1.0, contrast: 1.0 },
         output2: { brightness: 1.0, contrast: 1.0 }
     },
-    mixingModes: {
-        img1: 'magnitude_phase',
-        img2: 'magnitude_phase',
-        img3: 'magnitude_phase',
-        img4: 'magnitude_phase'
-    },
+    mixingMode: 'magnitude_phase', // Unified mode for all images
     weightsA: { img1: 0, img2: 0, img3: 0, img4: 0 },
     weightsB: { img1: 0, img2: 0, img3: 0, img4: 0 },
     selectedOutput: 1,
@@ -717,7 +712,7 @@ function initializeComponentSelects() {
  */
 
 /**
- * Initialize mixing mode dropdowns for each image
+ * Initialize unified mixing mode selector
  * 
  * Modes:
  * - magnitude_phase: Mix using magnitude and phase components
@@ -728,21 +723,25 @@ function initializeComponentSelects() {
  *   Component A (Slider A) = Real part
  *   Component B (Slider B) = Imaginary part
  * 
- * Design: Per-image mode selection allows flexible hybrid mixing
- * (e.g., Image 1 magnitude/phase + Image 2 real/imaginary)
+ * Design: Unified mode applies to all images simultaneously with auto-mixing
  */
 function initializeMixingMode() {
+    const modeSelect = document.getElementById('unified-mode-select');
+    
+    modeSelect.addEventListener('change', () => {
+        state.mixingMode = modeSelect.value;
+        
+        // Update all slider labels
+        for (let i = 1; i <= 4; i++) {
+            updateModeLabelsForImage(i, state.mixingMode);
+        }
+        
+        // Auto-apply mixing
+    });
+    
+    // Initialize all labels on page load
     for (let i = 1; i <= 4; i++) {
-        const modeSelect = document.getElementById(`mode-select-${i}`);
-        const imageKey = `img${i}`;
-        
-        modeSelect.addEventListener('change', () => {
-            state.mixingModes[imageKey] = modeSelect.value;
-            updateModeLabelsForImage(i, modeSelect.value);
-        });
-        
-        // Initialize labels on page load
-        updateModeLabelsForImage(i, state.mixingModes[imageKey]);
+        updateModeLabelsForImage(i, state.mixingMode);
     }
 }
 
@@ -947,7 +946,7 @@ async function performMixing() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                modes: state.mixingModes,    // Per-image mode selection
+                modes: Object.fromEntries(Object.keys(state.images).map(key => [key, state.mixingMode])), // Unified mode for all images
                 weights_a: state.weightsA,   // Component A weights
                 weights_b: state.weightsB,   // Component B weights
                 region: regionParams         // Frequency filter configuration

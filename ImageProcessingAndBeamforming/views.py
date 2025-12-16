@@ -379,8 +379,6 @@ def mix_images(request):
         - 405: Method not allowed (not POST)
         - 500: Server error during processing
     """
-    if request.method != 'POST':
-        return JsonResponse({'error': 'POST method required'}, status=405)
 
     try:
         data = json.loads(request.body)

@@ -67,7 +67,7 @@
                                 <input type="range" class="form-range" id="numElements" min="2" max="32" value="8">
                             </div>
 
-                            <!-- NEW: Spacing Mode Selection -->
+                            <!-- Spacing Mode Selection -->
                             <div class="mb-3">
                                 <label class="form-label-custom mb-2">Spacing Mode</label>
                                 <div class="d-flex gap-3">
@@ -86,7 +86,7 @@
                                 </div>
                             </div>
 
-                            <!-- MODIFIED: Spacing Slider with Dynamic Labels -->
+                            <!-- Spacing Slider with Dynamic Labels -->
                             <div class="mb-3">
                                 <div class="d-flex justify-content-between mb-1">
                                     <label class="form-label-custom" title="Distance between antenna elements">
@@ -211,6 +211,12 @@
         </div>
     </div>
 
-    <script src="{% static 'js/beamforman.js' %}"></script>
+    <!-- OOP-Structured JavaScript Files -->
+    <!-- IMPORTANT: Load in dependency order! -->
+    <script src="{% static 'js/Antenna.js' %}"></script>
+    <script src="{% static 'js/PhasedArray.js' %}"></script>
+    <script src="{% static 'js/Visualization.js' %}"></script>
+    <script src="{% static 'js/UIController.js' %}"></script>
+    <script src="{% static 'js/beamforman_refactored.js' %}"></script>
 </body>
 </html>

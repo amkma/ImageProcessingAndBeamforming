@@ -737,6 +737,7 @@ function initializeMixingMode() {
         }
         
         // Auto-apply mixing
+        performMixing();
     });
     
     // Initialize all labels on page load
@@ -850,7 +851,7 @@ async function updateComponentPreview(index) {
  * 
  * Range: 0-100% (stored as 0.0-1.0 in state)
  * 
- * Design: Real-time state updates, mixing triggered manually via output viewport click
+ * Design: Real-time state updates with auto-mixing to selected output
  */
 function initializeSliders() {
     for (let i = 1; i <= 4; i++) {
@@ -864,6 +865,7 @@ function initializeSliders() {
             const val = parseInt(e.target.value);
             valueA.textContent = val;
             state.weightsA[imageKey] = val / 100; // Convert to 0.0-1.0 range
+            performMixing(); // Auto-mix on slider change
         });
         
         // Component B slider (Phase or Imaginary)
@@ -874,6 +876,7 @@ function initializeSliders() {
             const val = parseInt(e.target.value);
             valueB.textContent = val;
             state.weightsB[imageKey] = val / 100; // Convert to 0.0-1.0 range
+            performMixing(); // Auto-mix on slider change
         });
     }
 }
@@ -991,7 +994,7 @@ function initializeOutputSelection() {
         const viewport = document.getElementById(`output-viewport-${i}`);
         const container = viewport.parentElement;
         
-        // Double-click to select and trigger mixing
+        // Double-click to select output target
         viewport.addEventListener('dblclick', () => {
             // Remove previous selection
             document.querySelectorAll('.output-container').forEach(c => {
@@ -1001,9 +1004,6 @@ function initializeOutputSelection() {
             // Mark as selected
             container.classList.add('selected');
             state.selectedOutput = i;
-            
-            // Auto-trigger mixing on double-click
-            performMixing();
         });
     }
     

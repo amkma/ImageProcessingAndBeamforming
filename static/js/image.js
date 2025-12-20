@@ -1069,6 +1069,7 @@ function initializeFilterControls() {
                 updateAllRectangles();
             }
             updateFilterMode();
+            performMixing();
         }
     });
     
@@ -1082,6 +1083,7 @@ function initializeFilterControls() {
                 updateAllRectangles();
             }
             updateFilterMode();
+            performMixing();
         }
     });
     
@@ -1099,6 +1101,7 @@ function initializeFilterControls() {
             };
             updateAllRectangles();
             updateFilterMode();
+            performMixing();
         }
     });
     
@@ -1241,6 +1244,7 @@ function handleRectangleMove(e) {
     
     // Update all rectangles synchronously
     updateAllRectangles();
+    performMixing();
 }
 
 function handleRectangleResize(e) {
@@ -1308,6 +1312,7 @@ function handleRectangleResize(e) {
     
     // Update all rectangles synchronously
     updateAllRectangles();
+    performMixing();
 }
 
 function handleRectangleEnd() {
@@ -1340,6 +1345,7 @@ function handleRectangleEnd() {
     document.removeEventListener('mousemove', handleRectangleMove);
     document.removeEventListener('mousemove', handleRectangleResize);
     document.removeEventListener('mouseup', handleRectangleEnd);
+    performMixing();
 }
 
 function updateAllRectangles() {

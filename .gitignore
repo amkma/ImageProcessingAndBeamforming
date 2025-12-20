@@ -1,5 +1,6 @@
 .venv
 .idea
+.github
 ImageProcessingAndBeamforming/__pycache__
 core/imagean/__pycache__
 core/beamforman/__pycache__

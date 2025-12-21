@@ -76,7 +76,44 @@ class ArrayManager {
         this._arrays.push(newArray);
         this._activeArrayIndex = this._arrays.length - 1;
         
-        console.log(`Array created. Total arrays: ${this._arrays.length}`);
+        console.log(`Array created: ${newArray.name}. Total arrays: ${this._arrays.length}`);
+        return newArray;
+    }
+
+    /**
+     * Create array from configuration object (for scenario loading)
+     * @param {object} config - Array configuration
+     * @returns {PhasedArray} Created array
+     */
+    createArrayFromConfig(config) {
+        console.log('Creating array from config:', config);
+        
+        const newArray = new PhasedArray(
+            config.num_antennas || 8,
+            config.distance_m || 0.15,
+            this._propagationSpeed
+        );
+        
+        // Apply configuration
+        newArray.name = config.name || `Array ${this._arrays.length + 1}`;
+        newArray.delay = config.delay_deg || 0;
+        newArray.geometry = config.array_geometry || 'Linear';
+        newArray.curvature = config.curvature || 0;
+        newArray.spacingMode = config.spacing_mode || 'absolute';
+        newArray.lambdaMultiplier = config.lambda_multiplier || 0.5;
+        newArray.positionX = config.positionX || 0;
+        newArray.positionY = config.positionY || 0;
+        newArray.rotation = config.rotation || 0;
+        
+        // Load frequencies if specified
+        if (config.frequencies) {
+            newArray.loadFrequencies(config.frequencies);
+        }
+        
+        this._arrays.push(newArray);
+        this._activeArrayIndex = this._arrays.length - 1;
+        
+        console.log(`Array created from config: ${newArray.name}. Total arrays: ${this._arrays.length}`);
         return newArray;
     }
 
@@ -399,45 +436,28 @@ class ArrayManager {
             console.log(`Creating ${config.arrays.length} arrays from scenario`);
             config.arrays.forEach((arrayConfig, index) => {
                 console.log(`Creating array ${index + 1}:`, arrayConfig);
-                this.createArray({
-                    name: arrayConfig.name || `Array ${index + 1}`,
-                    numAntennas: arrayConfig.num_antennas || 8,
-                    spacing: arrayConfig.distance_m || 0.15,
-                    delay: arrayConfig.delay_deg || 0,
-                    geometry: arrayConfig.array_geometry || 'Linear',
-                    curvature: arrayConfig.curvature || 0,
-                    spacingMode: arrayConfig.spacing_mode || 'absolute',
-                    positionX: arrayConfig.positionX || 0,
-                    positionY: arrayConfig.positionY || 0,
-                    rotation: arrayConfig.rotation || 0
-                });
-                
-                // Load frequencies if specified
-                if (arrayConfig.frequencies && this._arrays[index]) {
-                    this._arrays[index].loadFrequencies(arrayConfig.frequencies);
-                }
+                this.createArrayFromConfig(arrayConfig);
             });
         } else {
             // Legacy single-array support
             console.log('Creating single array from legacy config');
-            const arrayConfig = {
+            this.createArrayFromConfig({
                 name: config.name || 'Main Array',
-                numAntennas: config.num_antennas || 8,
-                spacing: config.distance_m || 0.15,
-                delay: config.delay_deg || 0,
-                geometry: config.array_geometry || 'Linear',
+                num_antennas: config.num_antennas || 8,
+                distance_m: config.distance_m || 0.15,
+                delay_deg: config.delay_deg || 0,
+                array_geometry: config.array_geometry || 'Linear',
                 curvature: config.curvature || 0,
-                spacingMode: config.spacing_mode || 'absolute',
+                spacing_mode: config.spacing_mode || 'absolute',
                 positionX: config.positionX || 0,
                 positionY: config.positionY || 0,
-                rotation: config.rotation || 0
-            };
-            this.createArray(arrayConfig);
-            
-            if (config.frequencies) {
-                this.activeArray.loadFrequencies(config.frequencies);
-            }
+                rotation: config.rotation || 0,
+                frequencies: config.frequencies || null
+            });
         }
+        
+        // Reset active array index
+        this._activeArrayIndex = this._arrays.length > 0 ? 0 : 0;
         
         console.log(`Scenario loaded. Total arrays: ${this._arrays.length}`);
     }
@@ -667,8 +687,14 @@ class PhasedArray {
         frequencies.forEach((freq, idx) => {
             if (idx < this.numAntennas) {
                 this._antennas[idx].frequency = freq;
+            } else if (idx >= this.numAntennas) {
+                // If we have more frequencies than antennas, add new antennas
+                this._antennas.push(new Antenna(idx, freq));
             }
         });
+        
+        // Recalculate positions after loading frequencies
+        this._recalculatePositions();
     }
 
     /**

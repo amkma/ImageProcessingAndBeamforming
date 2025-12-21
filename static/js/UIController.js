@@ -18,6 +18,9 @@ class UIController {
         this._isUpdating = false;
         this._rafId = null;
         
+        // NEW: Track new array name separately
+        this._newArrayName = '';
+        
         // DOM caches
         this._elements = {};
         
@@ -44,6 +47,7 @@ class UIController {
         this._elements.removeArrayBtn = document.getElementById('removeArrayBtn');
         this._elements.duplicateArrayBtn = document.getElementById('duplicateArrayBtn');
         this._elements.arrayNameInput = document.getElementById('arrayNameInput');
+        this._elements.renameArrayBtn = document.getElementById('renameArrayBtn'); // Optional
 
         // Sliders
         this._elements.numElementsSlider = document.getElementById('numElements');
@@ -108,7 +112,7 @@ class UIController {
     }
 
     /**
-     * Attach array management listeners
+     * Attach array management listeners - FIXED VERSION
      * @private
      */
     _attachArrayManagementListeners() {
@@ -117,23 +121,32 @@ class UIController {
             this._elements.arraySelect.addEventListener('change', (e) => {
                 this._selectedArrayIndex = parseInt(e.target.value);
                 this._arrayManager.activeArrayIndex = this._selectedArrayIndex;
-                console.log(`Array selected: ${this._selectedArrayIndex}`);
+                console.log(`Array selected: ${this._selectedArrayIndex} - ${this._getActiveArray()?.name}`);
                 this._refreshUI();
                 this._scheduleHeavyUpdate();
             });
         }
 
-        // Add array button
+        // Add array button - FIXED: Uses input value for new array name
         if (this._elements.addArrayBtn) {
             this._elements.addArrayBtn.addEventListener('click', () => {
-                const name = this._elements.arrayNameInput?.value || `Array ${this._arrayManager.numArrays + 1}`;
+                // Get name from input or use default
+                const name = this._getArrayNameInput() || `Array ${this._arrayManager.numArrays + 1}`;
+                
                 console.log(`Adding new array: ${name}`);
+                
                 this._arrayManager.createArray({
                     name: name,
                     numAntennas: 8,
                     spacing: 0.15,
-                    positionX: (this._arrayManager.numArrays - 1) * 2
+                    positionX: (this._arrayManager.numArrays) * 2 // Offset from existing arrays
                 });
+                
+                this._selectedArrayIndex = this._arrayManager.numArrays - 1;
+                
+                // Clear input after adding
+                this._clearArrayNameInput();
+                
                 this._updateArraySelect();
                 this._refreshUI();
                 this._scheduleHeavyUpdate();
@@ -144,11 +157,16 @@ class UIController {
         if (this._elements.removeArrayBtn) {
             this._elements.removeArrayBtn.addEventListener('click', () => {
                 if (this._arrayManager.numArrays > 1) {
-                    console.log(`Removing array at index ${this._selectedArrayIndex}`);
-                    this._arrayManager.removeArray(this._selectedArrayIndex);
-                    this._updateArraySelect();
-                    this._refreshUI();
-                    this._scheduleHeavyUpdate();
+                    const arrayName = this._getActiveArray()?.name || `Array ${this._selectedArrayIndex + 1}`;
+                    
+                    if (confirm(`Are you sure you want to remove "${arrayName}"?`)) {
+                        console.log(`Removing array at index ${this._selectedArrayIndex}: ${arrayName}`);
+                        this._arrayManager.removeArray(this._selectedArrayIndex);
+                        this._selectedArrayIndex = Math.min(this._selectedArrayIndex, this._arrayManager.numArrays - 1);
+                        this._updateArraySelect();
+                        this._refreshUI();
+                        this._scheduleHeavyUpdate();
+                    }
                 } else {
                     alert("Cannot remove the last array. At least one array must exist.");
                 }
@@ -158,25 +176,92 @@ class UIController {
         // Duplicate array button
         if (this._elements.duplicateArrayBtn) {
             this._elements.duplicateArrayBtn.addEventListener('click', () => {
-                console.log(`Duplicating array at index ${this._selectedArrayIndex}`);
-                this._arrayManager.duplicateArray(this._selectedArrayIndex);
-                this._updateArraySelect();
-                this._refreshUI();
-                this._scheduleHeavyUpdate();
+                const sourceArray = this._getActiveArray();
+                if (sourceArray) {
+                    console.log(`Duplicating array: ${sourceArray.name}`);
+                    this._arrayManager.duplicateArray(this._selectedArrayIndex);
+                    this._selectedArrayIndex = this._arrayManager.numArrays - 1;
+                    this._updateArraySelect();
+                    this._refreshUI();
+                    this._scheduleHeavyUpdate();
+                }
             });
         }
 
-        // Array name input
+        // Array name input - FIXED: Multiple use cases
         if (this._elements.arrayNameInput) {
-            this._elements.arrayNameInput.addEventListener('change', (e) => {
-                const array = this._getActiveArray();
-                if (array) {
-                    array.name = e.target.value;
-                    console.log(`Array renamed to: ${e.target.value}`);
-                    this._updateArraySelect();
-                    this._updateArrayInfo();
+            // Handle Enter key for quick operations
+            this._elements.arrayNameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this._handleArrayNameEnter();
                 }
             });
+            
+            // Handle input changes
+            this._elements.arrayNameInput.addEventListener('input', (e) => {
+                this._newArrayName = e.target.value.trim();
+            });
+        }
+        
+        // Rename button (if exists)
+        if (this._elements.renameArrayBtn) {
+            this._elements.renameArrayBtn.addEventListener('click', () => {
+                this._renameCurrentArray();
+            });
+        }
+    }
+    
+    /**
+     * Get array name from input field
+     * @private
+     */
+    _getArrayNameInput() {
+        if (!this._elements.arrayNameInput) return '';
+        return this._elements.arrayNameInput.value.trim();
+    }
+    
+    /**
+     * Clear array name input field
+     * @private
+     */
+    _clearArrayNameInput() {
+        if (this._elements.arrayNameInput) {
+            this._elements.arrayNameInput.value = '';
+            this._newArrayName = '';
+        }
+    }
+    
+    /**
+     * Handle Enter key in array name input
+     * @private
+     */
+    _handleArrayNameEnter() {
+        const name = this._getArrayNameInput();
+        if (!name) return;
+        
+        // If input has focus and Enter is pressed, rename current array
+        this._renameCurrentArray();
+    }
+    
+    /**
+     * Rename the current array
+     * @private
+     */
+    _renameCurrentArray() {
+        const array = this._getActiveArray();
+        const newName = this._getArrayNameInput();
+        
+        if (!array || !newName) return;
+        
+        if (newName !== array.name) {
+            console.log(`Renaming array from "${array.name}" to "${newName}"`);
+            array.name = newName;
+            this._updateArraySelect();
+            this._updateArrayInfo();
+            
+            // Clear input after rename
+            this._clearArrayNameInput();
         }
     }
 
@@ -416,18 +501,35 @@ class UIController {
      * @private
      */
     _updateArraySelect() {
-        if (!this._elements.arraySelect) return;
+        if (!this._elements.arraySelect) {
+            console.error('arraySelect element not found!');
+            return;
+        }
         
+        console.log('Updating array select. Total arrays:', this._arrayManager.numArrays);
+        
+        // Clear existing options
         this._elements.arraySelect.innerHTML = '';
+        
+        // Add options for each array
         this._arrayManager.arrays.forEach((array, index) => {
             const opt = document.createElement('option');
             opt.value = index;
-            opt.text = array.name;
+            opt.textContent = array.name || `Array ${index + 1}`;
             opt.selected = (index === this._selectedArrayIndex);
             this._elements.arraySelect.appendChild(opt);
         });
         
-        console.log(`Array select updated. Total options: ${this._arrayManager.arrays.length}`);
+        // If no arrays, add a default option
+        if (this._arrayManager.numArrays === 0) {
+            const opt = document.createElement('option');
+            opt.value = 0;
+            opt.textContent = 'No arrays';
+            opt.disabled = true;
+            this._elements.arraySelect.appendChild(opt);
+        }
+        
+        console.log(`Array select updated with ${this._arrayManager.numArrays} options, selected: ${this._selectedArrayIndex}`);
     }
 
     /**
@@ -514,9 +616,26 @@ class UIController {
      * @private
      */
     _refreshUI() {
+        // Always update array select first
+        this._updateArraySelect();
+        
         const array = this._getActiveArray();
         if (!array) {
             console.warn('No active array found for UI refresh');
+            // Create default array if none exists
+            if (this._arrayManager.numArrays === 0) {
+                console.log('Creating default array');
+                this._arrayManager.createArray({
+                    name: 'Array 1',
+                    numAntennas: 8,
+                    spacing: 0.15
+                });
+                this._selectedArrayIndex = 0;
+                this._updateArraySelect();
+                // Recursive call to refresh with new array
+                this._refreshUI();
+                return;
+            }
             return;
         }
 
@@ -572,9 +691,15 @@ class UIController {
         this._elements.curvatureGroup.style.display =
             (array.geometry === 'Curved') ? 'block' : 'none';
 
-        // Update name input
+        // Update name input - Show placeholder with current name
         if (this._elements.arrayNameInput) {
-            this._elements.arrayNameInput.value = array.name;
+            // Set placeholder to show current array name
+            this._elements.arrayNameInput.placeholder = `"${array.name}" - Type to rename`;
+            
+            // Only clear input if user hasn't started typing a new name
+            if (!this._newArrayName) {
+                this._elements.arrayNameInput.value = '';
+            }
         }
 
         // Update other UI components
@@ -599,7 +724,7 @@ class UIController {
         for (let i = 0; i < array.numAntennas; i++) {
             const opt = document.createElement('option');
             opt.value = i;
-            opt.text = `Antenna ${i + 1}`;
+            opt.textContent = `Antenna ${i + 1}`;
             this._elements.antennaSelect.appendChild(opt);
         }
 
@@ -823,32 +948,95 @@ class UIController {
     _updateAllUIControlsFromScenario(scenarioConfig) {
         console.log('Updating UI controls from scenario config:', scenarioConfig);
         
-        // Update global controls
-        if (scenarioConfig.combined_delay !== undefined) {
-            this._arrayManager.combinedDelay = scenarioConfig.combined_delay;
-            if (this._elements.combinedDelaySlider) {
-                this._elements.combinedDelaySlider.value = scenarioConfig.combined_delay;
-                this._elements.combinedDelayValue.textContent = scenarioConfig.combined_delay + '°';
-            }
-        }
+        // Store frequency range from scenario
+        this._currentFreqRange = scenarioConfig.freqRange || null;
         
+        // Clear existing arrays
+        this._arrayManager._arrays = [];
+        
+        // Set global properties
         if (scenarioConfig.propagation_speed !== undefined) {
             this._arrayManager.propagationSpeed = scenarioConfig.propagation_speed;
         }
-
-        // Update array controls for each array
-        const arrays = scenarioConfig.arrays || [scenarioConfig]; // Support both single and multi-array
+        if (scenarioConfig.combined_delay !== undefined) {
+            this._arrayManager.combinedDelay = scenarioConfig.combined_delay;
+        }
         
-        arrays.forEach((arrayConfig, index) => {
-            if (index < this._arrayManager.arrays.length) {
-                const array = this._arrayManager.arrays[index];
+        // Create arrays based on scenario
+        if (scenarioConfig.arrays && Array.isArray(scenarioConfig.arrays)) {
+            console.log(`Creating ${scenarioConfig.arrays.length} arrays from scenario`);
+            scenarioConfig.arrays.forEach((arrayConfig, index) => {
+                console.log(`Creating array ${index + 1}:`, arrayConfig);
                 
-                console.log(`Updating array ${index} with config:`, arrayConfig);
+                // Create array with configuration
+                const newArray = new PhasedArray(
+                    arrayConfig.num_antennas || 8,
+                    arrayConfig.distance_m || 0.15,
+                    this._arrayManager.propagationSpeed
+                );
                 
-                // Update array configuration
-                array.loadConfiguration(arrayConfig);
+                // Apply configuration
+                newArray.name = arrayConfig.name || `Array ${index + 1}`;
+                newArray.delay = arrayConfig.delay_deg || 0;
+                newArray.geometry = arrayConfig.array_geometry || 'Linear';
+                newArray.curvature = arrayConfig.curvature || 0;
+                newArray.spacingMode = arrayConfig.spacing_mode || 'absolute';
+                newArray.lambdaMultiplier = arrayConfig.lambda_multiplier || 0.5;
+                newArray.positionX = arrayConfig.positionX || 0;
+                newArray.positionY = arrayConfig.positionY || 0;
+                newArray.rotation = arrayConfig.rotation || 0;
+                
+                // Load frequencies if specified
+                if (arrayConfig.frequencies) {
+                    newArray.loadFrequencies(arrayConfig.frequencies);
+                }
+                
+                // Add to array manager
+                this._arrayManager._arrays.push(newArray);
+            });
+            
+            // Set active array index
+            this._selectedArrayIndex = 0;
+            this._arrayManager._activeArrayIndex = 0;
+            
+            console.log(`Arrays created: ${this._arrayManager._arrays.length}`);
+        } else {
+            // Legacy single-array support
+            console.log('Creating single array from legacy config');
+            const newArray = new PhasedArray(
+                scenarioConfig.num_antennas || 8,
+                scenarioConfig.distance_m || 0.15,
+                this._arrayManager.propagationSpeed
+            );
+            
+            newArray.name = scenarioConfig.name || 'Main Array';
+            newArray.delay = scenarioConfig.delay_deg || 0;
+            newArray.geometry = scenarioConfig.array_geometry || 'Linear';
+            newArray.curvature = scenarioConfig.curvature || 0;
+            newArray.spacingMode = scenarioConfig.spacing_mode || 'absolute';
+            newArray.positionX = scenarioConfig.positionX || 0;
+            newArray.positionY = scenarioConfig.positionY || 0;
+            newArray.rotation = scenarioConfig.rotation || 0;
+            
+            if (scenarioConfig.frequencies) {
+                newArray.loadFrequencies(scenarioConfig.frequencies);
             }
-        });
+            
+            this._arrayManager._arrays = [newArray];
+            this._selectedArrayIndex = 0;
+            this._arrayManager._activeArrayIndex = 0;
+        }
+        
+        // Update combined delay slider
+        if (this._elements.combinedDelaySlider) {
+            this._elements.combinedDelaySlider.value = this._arrayManager.combinedDelay;
+            this._elements.combinedDelayValue.textContent = this._arrayManager.combinedDelay + '°';
+        }
+        
+        // Clear any pending array name input
+        this._clearArrayNameInput();
+        
+        console.log('Scenario arrays loaded:', this._arrayManager._arrays);
     }
 
     /**
@@ -865,20 +1053,15 @@ class UIController {
             this._rafId = null;
         }
 
-        // Store frequency range from scenario
-        this._currentFreqRange = scenarioConfig.freqRange || null;
-
-        this._arrayManager.loadScenario(scenarioConfig);
-        this._selectedArrayIndex = this._arrayManager.activeArrayIndex;
         this._activeScenario = scenarioName;
         this._activeScenarioName = scenarioConfig.name || 
             scenarioName.charAt(0).toUpperCase() + scenarioName.slice(1);
 
-        // FIXED: Update ALL UI controls with scenario values
+        // Update ALL UI controls with scenario values
         this._updateAllUIControlsFromScenario(scenarioConfig);
 
         this._updateModeIndicator();
-        this._refreshUI();
+        this._refreshUI(); // This will now update arraySelect
 
         setTimeout(() => {
             this._fullUpdate();

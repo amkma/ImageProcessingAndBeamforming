@@ -1,28 +1,4 @@
-/**
- * ImageMixer - Fourier Transform-based Image Processing Application
- * 
- * Architecture:
- * - Centralized state management for all application data
- * - Event-driven UI interactions with drag-based adjustments
- * - Real-time FFT component visualization
- * - Frequency domain filtering with visual rectangle overlay
- * - Per-image mixing mode selection (magnitude/phase or real/imaginary)
- */
 
-/**
- * Application State
- * Centralized state object containing all runtime data:
- * - images: Base64-encoded grayscale images for 4 input slots
- * - adjustments: Display-only brightness/contrast for input viewports (does not affect FFT)
- * - outputAdjustments: Client-side brightness/contrast for output viewports
- * - mixingMode: Unified mode for all images ('magnitude_phase' or 'real_imaginary')
- * - weightsA/B: Slider weights for component A (Mag/Real) and B (Phase/Imag)
- * - selectedOutput: Which output viewport (1 or 2) receives mixed results
- * - pendingRequest: AbortController for canceling in-flight API requests
- * - dragState: Active drag operation state for input viewport adjustments
- * - filter: Frequency domain filter configuration (rectangle coordinates and mode)
- * - rectangleDragState: Active drag operation for filter rectangle manipulation
- */
 const state = {
     images: {
         img1: null,
@@ -59,10 +35,7 @@ const state = {
     rectangleDragState: null
 };
 
-/**
- * Status Indicator Management
- * Handles the floating status indicator UI element
- */
+
 let statusTimeout = null;
 
 /**

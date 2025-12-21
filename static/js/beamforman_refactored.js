@@ -2,7 +2,6 @@
  * Main Application - Beamforming Simulator
  * Minimal main code - all logic encapsulated in classes
  */
-
 // Scenario Configurations
 const SCENARIOS = {
     '5g': {

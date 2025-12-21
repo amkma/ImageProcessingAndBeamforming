@@ -1,43 +1,3 @@
-"""Core Image Processing Engine for Frequency Domain Operations.
-
-This module implements the ImageViewer class, which provides comprehensive
-image processing capabilities focused on Fourier Transform operations and
-frequency domain mixing. Designed for real-time web applications with
-emphasis on performance optimization through aggressive caching.
-
-Architecture:
-- Session-based state management (images, FFT cache, adjustment tracking)
-- Aggressive pre-computation strategy (FFT computed on upload)
-- Immutable original images (adjustments never modify originals)
-- Unified Region Model (frequency masking always applied)
-
-Performance Optimizations:
-- Pre-computed FFT cache eliminates redundant transforms
-- NumPy vectorized operations for maximum throughput
-- Strategic copy operations minimize memory overhead
-- In-place operations where safe (clipping, masking)
-
-Core Operations:
-1. Image Loading: Grayscale conversion + FFT pre-computation
-2. Component Extraction: Magnitude, phase, real, imaginary from cache
-3. Frequency Mixing: Multi-image blending in frequency domain
-4. Spatial Adjustments: Brightness/contrast with FFT recomputation
-5. Session Management: Clear, status, base64 conversion
-
-Design Principles:
-- Stateless request handling (strict parameter enforcement)
-- Cache invalidation on any spatial modification
-- Original images preserved for clean FFT computation
-- Type safety with explicit dtype declarations
-
-Dependencies:
-- numpy: Fast array operations and FFT computation
-- PIL: Image I/O and format conversion
-- io, base64: Web encoding for browser display
-
-Author: Image Processing and Beamforming Team
-Optimized: December 2025
-"""
 
 import numpy as np
 from PIL import Image
@@ -46,20 +6,7 @@ import base64
 
 
 class ImageViewer:
-    """Manages image processing operations with frequency domain focus.
-    
-    State Management:
-    - images: Currently displayed versions (post-adjustment)
-    - original_images: Immutable originals for clean FFT
-    - last_adjustments: Tracks cumulative brightness/contrast
-    - fft_cache: Pre-computed FFT components (magnitude, phase, real, imaginary)
-    
-    Performance Notes:
-    - All dictionaries use image_key as string identifier
-    - FFT cache eliminates redundant O(n²log n) operations
-    - Original images preserved for reference='original' mode
-    - Current images support reference='current' delta adjustments
-    """
+
     
     def __init__(self):
         """Initialize empty image viewer with clean state."""
@@ -69,35 +16,7 @@ class ImageViewer:
         self.fft_cache = {}  # Pre-computed FFT components for instant access
         
     def load_image(self, image_key, image_data):
-        """Load image with grayscale conversion and FFT pre-computation.
-        
-        Workflow:
-        1. Load image from file path or PIL object
-        2. Force grayscale conversion (required for FFT)
-        3. Convert to float64 for precision in frequency domain
-        4. Store both original (immutable) and current (mutable) versions
-        5. Pre-compute all FFT components (magnitude, phase, real, imaginary)
-        6. Initialize adjustment tracking to neutral state
-        
-        Args:
-            image_key (str): Identifier ('img1', 'img2', 'img3', 'img4')
-            image_data (str | PIL.Image): File path or PIL Image object
-            
-        Returns:
-            tuple: (height, width) shape of loaded image
-            
-        Performance:
-        - O(1) image loading
-        - O(n²log n) FFT pre-computation (one-time cost)
-        - O(n²) component extraction (vectorized)
-        - Total: ~100-200ms for 512×512 image
-        
-        Optimization Notes:
-        - Uses float64 for FFT precision (required by numpy.fft)
-        - Pre-computes all components in single pass
-        - Eliminates redundant FFT calls during component requests
-        - Copy operation ensures original immutability
-        """
+ 
         # Load image from file or object
         if isinstance(image_data, str):
             img = Image.open(image_data)
@@ -147,35 +66,6 @@ class ImageViewer:
         }
     
     def check_and_resize_to_smallest(self):
-        """Enforce unified dimensions by cropping all images to smallest size.
-        
-        Workflow:
-        1. Find minimum dimensions among all loaded images
-        2. For each oversized image:
-           - Resize current display version
-           - Resize original immutable version
-           - Invalidate and recompute FFT cache
-        3. Return unified dimensions
-        
-        Why Crop (Not Scale):
-        - Preserves spatial frequencies (no interpolation artifacts)
-        - Maintains frequency domain accuracy
-        - Required for frequency mixing (matching FFT dimensions)
-        
-        Returns:
-            tuple: (height, width) of unified dimensions, or None if no images
-            
-        Performance:
-        - Finding min: O(k) where k = number of images
-        - Resizing: O(k × n²) where n² = image pixels
-        - FFT recomputation: O(k × n²log n) for resized images only
-        - Uses Lanczos resampling for quality (slower but higher fidelity)
-        
-        Optimization Notes:
-        - Only resizes images that don't match target dimensions
-        - Reuses _compute_and_cache_fft helper for consistency
-        - Maintains adjustment tracking (no reset needed)
-        """
         if len(self.images) == 0:
             return None
             
@@ -203,25 +93,7 @@ class ImageViewer:
         return (min_height, min_width)
     
     def _get_fft(self, image_key):
-        """Retrieve pre-computed FFT from cache with validation.
-        
-        Args:
-            image_key (str): Image identifier
-            
-        Returns:
-            dict: Cached FFT components {
-                'fft': complex FFT,
-                'magnitude': absolute values,
-                'phase': angles in radians,
-                'real': real components,
-                'imaginary': imaginary components
-            }
-            
-        Raises:
-            ValueError: If image not loaded or FFT not computed
-            
-        Performance: O(1) dictionary lookup, no FFT computation
-        """
+       
         if image_key not in self.images:
             raise ValueError(f"Image '{image_key}' not loaded")
             
@@ -231,112 +103,27 @@ class ImageViewer:
         return self.fft_cache[image_key]
     
     def get_magnitude(self, image_key):
-        """Retrieve pre-computed magnitude spectrum from cache.
-        
-        Args:
-            image_key (str): Image identifier
-            
-        Returns:
-            np.ndarray: Magnitude spectrum (float64), shape (H, W)
-            
-        Performance: O(1) cache lookup, no FFT computation
-        """
+      
         fft_cache = self._get_fft(image_key)
         return fft_cache['magnitude']
     
     def get_phase(self, image_key):
-        """Retrieve pre-computed phase spectrum from cache.
-        
-        Args:
-            image_key (str): Image identifier
-            
-        Returns:
-            np.ndarray: Phase spectrum in radians [-π, π], shape (H, W)
-            
-        Performance: O(1) cache lookup, no FFT computation
-        """
+      
         fft_cache = self._get_fft(image_key)
         return fft_cache['phase']
     
     def get_real(self, image_key):
-        """Retrieve pre-computed real component from cache.
-        
-        Args:
-            image_key (str): Image identifier
-            
-        Returns:
-            np.ndarray: Real component of FFT (float64), shape (H, W)
-            
-        Performance: O(1) cache lookup, no FFT computation
-        """
+     
         fft_cache = self._get_fft(image_key)
         return fft_cache['real']
     
     def get_imaginary(self, image_key):
-        """Retrieve pre-computed imaginary component from cache.
-        
-        Args:
-            image_key (str): Image identifier
-            
-        Returns:
-            np.ndarray: Imaginary component of FFT (float64), shape (H, W)
-            
-        Performance: O(1) cache lookup, no FFT computation
-        """
+      
         fft_cache = self._get_fft(image_key)
         return fft_cache['imaginary']
     
     def mix_images(self, modes, weights_a, weights_b, region_params):
-        """Frequency domain mixing with Unified Region Model and IFFT.
-        
-        Algorithm:
-        1. Validate inputs and find reference dimensions
-        2. Create frequency mask from region parameters
-        3. For each image:
-           a. Compute fresh FFT from original image
-           b. Extract components based on mode (mag/phase or real/imag)
-           c. Apply frequency mask to components
-           d. Accumulate weighted components
-        4. Reconstruct complex FFT from weighted components
-        5. Apply Inverse FFT to generate spatial output
-        6. Normalize and clip to [0, 255]
-        
-        Args:
-            modes (dict): {image_key: 'magnitude_phase' | 'real_imaginary'}
-            weights_a (dict): {image_key: weight} for component A (mag/real) [0.0, 1.0]
-            weights_b (dict): {image_key: weight} for component B (phase/imag) [0.0, 1.0]
-            region_params (dict): {
-                'x': float [0.0, 1.0],
-                'y': float [0.0, 1.0],
-                'width': float [0.0, 1.0],
-                'height': float [0.0, 1.0],
-                'type': 'inner' | 'outer'
-            }
-        
-        Returns:
-            np.ndarray: Mixed spatial image (uint8), shape (H, W), or None if invalid
-        
-        Performance:
-        - Input validation: O(k) where k = number of images
-        - Mask creation: O(n²) where n² = image pixels
-        - Per-image FFT: O(n²log n)
-        - Component extraction: O(n²) vectorized
-        - Weighted accumulation: O(n²) vectorized
-        - IFFT: O(n²log n)
-        - Total: O(k × n²log n) dominated by FFT operations
-        
-        Optimization Notes:
-        - Early returns for invalid inputs (avoids wasted computation)
-        - Fresh FFT from originals (ensures clean state)
-        - Vectorized masking and accumulation (NumPy fast path)
-        - In-place clip operation (memory efficient)
-        - Skip images with both weights = 0.0 (optimization)
-        
-        Unified Region Model:
-        - ALWAYS applies frequency mask (no conditional bypass)
-        - Full spectrum: x=0, y=0, w=1.0, h=1.0, type='inner'
-        - Custom filter: user-defined rectangle with inner/outer type
-        """
+       
         # Early return: validate weights provided
         if not weights_a:
             return None
@@ -420,37 +207,7 @@ class ImageViewer:
         return img_back.astype(np.uint8)
     
     def _create_frequency_mask(self, shape, mode, rect_coords):
-        """Create binary frequency mask for rectangular region filtering.
-        
-        Mask Types:
-        - Inner: Keep frequencies inside rectangle, reject outside (low-pass)
-        - Outer: Keep frequencies outside rectangle, reject inside (high-pass)
-        
-        Args:
-            shape (tuple): (height, width) of frequency domain
-            mode (str): 'inner' (keep inside) or 'outer' (keep outside)
-            rect_coords (dict): {
-                'x': float [0.0, 1.0] - normalized left edge,
-                'y': float [0.0, 1.0] - normalized top edge,
-                'width': float [0.0, 1.0] - normalized width,
-                'height': float [0.0, 1.0] - normalized height
-            }
-            
-        Returns:
-            np.ndarray: Binary mask (float64), 1.0 = keep, 0.0 = reject
-        
-        Performance:
-        - Coordinate conversion: O(1)
-        - Mask allocation: O(n²)
-        - Slice assignment: O(region_size)
-        - Total: O(n²) dominated by allocation
-        
-        Optimization Notes:
-        - Single zeros allocation (not ones then zeros)
-        - Slice assignment faster than element-wise
-        - Bounds clamping prevents index errors
-        - Minimum size ensures non-zero region
-        """
+      
         height, width = shape
         
         # Extract normalized coordinates (defaults for safety)
@@ -494,64 +251,7 @@ class ImageViewer:
         return mask
     
     def apply_brightness_contrast(self, image_key, brightness, contrast, reference='original'):
-        """Apply brightness and contrast adjustments with dual reference modes.
-        
-        Reference Modes:
-        - 'original': Absolute adjustments from original uploaded image
-        - 'current': Relative adjustments from current displayed state
-        
-        Algorithm:
-        1. Validate and clamp input parameters
-        2. Select source image based on reference mode
-        3. Apply brightness: pixel × brightness_multiplier
-        4. Apply contrast: (pixel - 127.5) × contrast_multiplier + 127.5
-        5. Clip to [0, 255] range
-        6. Update adjustment tracking
-        
-        Args:
-            image_key (str): Image identifier
-            brightness (float): Brightness multiplier [0.00, 2.00]
-                * < 1.0: Darken
-                * = 1.0: No change
-                * > 1.0: Brighten
-            contrast (float): Contrast multiplier [0.00, 3.00]
-                * < 1.0: Reduce contrast
-                * = 1.0: No change
-                * > 1.0: Increase contrast
-            reference (str): 'original' (absolute) or 'current' (relative)
-                * 'original': Always relative to original image
-                * 'current': Relative to current displayed state (stacks)
-        
-        Returns:
-            tuple: (adjusted_image, shape, applied_brightness, applied_contrast)
-                - adjusted_image (np.ndarray): Adjusted image (float64)
-                - shape (tuple): (height, width)
-                - applied_brightness (float): Clamped brightness value
-                - applied_contrast (float): Clamped contrast value
-        
-        Raises:
-            ValueError: If image_key not loaded or invalid reference mode
-        
-        Performance:
-        - Validation: O(1)
-        - Copy operation: O(n²)
-        - Brightness: O(n²) vectorized multiplication
-        - Contrast: O(n²) vectorized operations
-        - Clipping: O(n²) vectorized
-        - Total: O(n²) all vectorized NumPy operations
-        
-        Optimization Notes:
-        - Vectorized operations (NumPy broadcast)
-        - Single copy operation (minimizes memory)
-        - In-place-safe clipping
-        - Tracking prevents state accumulation
-        
-        Design Notes:
-        - Does NOT update self.images or FFT cache
-        - Original images remain immutable
-        - Adjustments are display-only (spatial domain)
-        - Backend must recompute FFT if adjustments persist
-        """
+       
         if image_key not in self.images:
             loaded_keys = list(self.images.keys())
             raise ValueError(f"Image '{image_key}' not loaded. Available images: {loaded_keys}")
@@ -611,58 +311,18 @@ class ImageViewer:
         return adjusted, adjusted.shape, brightness, contrast
     
     def clear_images(self):
-        """Clear all session state and reset viewer.
-        
-        Clears:
-        - images: Currently displayed versions
-        - original_images: Immutable originals
-        - last_adjustments: Brightness/contrast tracking
-        - fft_cache: Pre-computed FFT components
-        
-        Performance: O(1) dictionary clear operations
-        """
+      
         self.images.clear()
         self.original_images.clear()
         self.last_adjustments.clear()
         self.fft_cache.clear()
     
     def get_loaded_images(self):
-        """Retrieve list of loaded image identifiers.
-        
-        Returns:
-            list: Image keys as strings ['img1', 'img2', ...] or empty list
-            
-        Performance: O(k) where k = number of loaded images
-        """
+       
         return list(self.images.keys())
     
     def image_to_base64(self, image_array):
-        """Convert NumPy array to base64-encoded PNG for web display.
-        
-        Workflow:
-        1. Convert float64 array to uint8 (required by PIL)
-        2. Create PIL Image object
-        3. Encode as PNG to BytesIO buffer
-        4. Base64 encode PNG bytes
-        5. Prepend data URI scheme for browser compatibility
-        
-        Args:
-            image_array (np.ndarray): Image array (any dtype, converted to uint8)
-        
-        Returns:
-            str: Data URI 'data:image/png;base64,{encoded_data}'
-        
-        Performance:
-        - Type conversion: O(n²)
-        - PNG encoding: O(n²) with compression
-        - Base64 encoding: O(n²)
-        - Total: O(n²) dominated by PNG compression
-        
-        Optimization Notes:
-        - PNG format provides lossless compression (~50% size reduction)
-        - Base64 encoding increases size by ~33% (3 bytes → 4 chars)
-        - BytesIO avoids disk I/O (in-memory only)
-        """
+       
         img_pil = Image.fromarray(image_array.astype(np.uint8))
         buffer = io.BytesIO()
         img_pil.save(buffer, format='PNG')

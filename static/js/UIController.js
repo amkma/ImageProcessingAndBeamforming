@@ -4,18 +4,22 @@
  */
 class UIController {
     constructor(phasedArray, visualization) {
+        //classes
         this._array = phasedArray;
         this._viz = visualization;
+
+
+        // variables
         this._selectedAntenna = 0;
         this._activeScenario = null;
         this._activeScenarioName = 'Custom';
         this._gridSize = 200;
         this._currentFreqRange = null; // Store current frequency range
-
         this._updateTimer = null;
         this._isUpdating = false;
         this._rafId = null;
-
+        
+        // calling those
         this._cacheElements();
         this._attachEventListeners();
         this._refreshUI();
@@ -222,7 +226,7 @@ class UIController {
      * @private
      */
     _updateSpacingSliderForAbsolute() {
-        this._distanceSlider.min = 0.1;
+        this._distanceSlider.min = 0;
         this._distanceSlider.max = 5.0;
         this._distanceSlider.step = 0.1;
         this._distanceSlider.value = this._array.spacing;
@@ -233,7 +237,7 @@ class UIController {
      * @private
      */
     _updateSpacingSliderForLambda() {
-        this._distanceSlider.min = 0.1;
+        this._distanceSlider.min = 0;
         this._distanceSlider.max = 2.0;
         this._distanceSlider.step = 0.01;
         this._distanceSlider.value = this._array.lambdaMultiplier;

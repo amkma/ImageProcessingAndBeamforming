@@ -747,28 +747,7 @@ input[type=range]::-moz-range-thumb:hover {
     letter-spacing: 0.5px;
 }
 
-/* Status Indicator */
-.status-indicator {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    display: inline-block;
-}
 
-.status-ready {
-    background-color: #00ff90;
-    box-shadow: 0 0 8px #00ff90;
-    animation: statusPulse 2s infinite;
-}
-
-@keyframes statusPulse {
-    0%, 100% {
-        box-shadow: 0 0 6px #00ff90;
-    }
-    50% {
-        box-shadow: 0 0 12px #00ff90;
-    }
-}
 
 /* Button Styles */
 .btn {
@@ -846,3 +825,25 @@ input[type=range]::-moz-range-thumb:hover {
         }
     }
 }
+
+//================================================================
+/* Header Status Dot */
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    background-color: #00ff90;
+    box-shadow: 0 0 8px #00ff90;
+    animation: statusPulse 2s infinite;
+}
+
+@keyframes statusPulse {
+    0%, 100% {
+        box-shadow: 0 0 6px #00ff90;
+    }
+    50% {
+        box-shadow: 0 0 12px #00ff90;
+    }
+}
+

@@ -1,4 +1,28 @@
+/**
+ * ImageMixer - Fourier Transform-based Image Processing Application
+ * 
+ * Architecture:
+ * - Centralized state management for all application data
+ * - Event-driven UI interactions with drag-based adjustments
+ * - Real-time FFT component visualization
+ * - Frequency domain filtering with visual rectangle overlay
+ * - Per-image mixing mode selection (magnitude/phase or real/imaginary)
+ */
 
+/**
+ * Application State
+ * Centralized state object containing all runtime data:
+ * - images: Base64-encoded grayscale images for 4 input slots
+ * - adjustments: Display-only brightness/contrast for input viewports (does not affect FFT)
+ * - outputAdjustments: Client-side brightness/contrast for output viewports
+ * - mixingMode: Unified mode for all images ('magnitude_phase' or 'real_imaginary')
+ * - weightsA/B: Slider weights for component A (Mag/Real) and B (Phase/Imag)
+ * - selectedOutput: Which output viewport (1 or 2) receives mixed results
+ * - pendingRequest: AbortController for canceling in-flight API requests
+ * - dragState: Active drag operation state for input viewport adjustments
+ * - filter: Frequency domain filter configuration (rectangle coordinates and mode)
+ * - rectangleDragState: Active drag operation for filter rectangle manipulation
+ */
 const state = {
     images: {
         img1: null,
@@ -35,7 +59,10 @@ const state = {
     rectangleDragState: null
 };
 
-
+/**
+ * Status Indicator Management
+ * Handles the floating status indicator UI element
+ */
 let statusTimeout = null;
 
 /**
@@ -82,8 +109,7 @@ function hideStatus() {
  */
 document.addEventListener('DOMContentLoaded', () => {
     initializeFileInputs();              // File upload handlers
-    initializeViewportDrag();            // Input viewport brightness/contrast drag
-    initializeOutputViewportDrag();      // Output viewport adjustment drag
+    initializeViewportDrag();            // Input and output viewport brightness/contrast drag
     initializeComponentSelects();        // FFT component dropdown menus
     initializeMixingMode();              // Mixing mode dropdown handlers
     initializeSliders();                 // Weight slider event handlers
@@ -113,14 +139,14 @@ function hasLoadedImages() {
     return Object.values(state.images).some(img => img !== null);
 }
 
-/**
- * Get count of loaded images
- * @returns {number} Number of non-null images in state
- * @deprecated Not currently used - candidate for removal if not needed
- */
-function getLoadedImageCount() {
-    return Object.values(state.images).filter(img => img !== null).length;
-}
+// /**
+//  * Get count of loaded images
+//  * @returns {number} Number of non-null images in state
+//  * @deprecated Not currently used - candidate for removal if not needed
+//  */
+// function getLoadedImageCount() {
+//     return Object.values(state.images).filter(img => img !== null).length;
+// }
 
 /**
  * =============================================================================
@@ -253,6 +279,8 @@ function resizeAllInputViewportsToSmallest() {
     let minHeight = Infinity;
     let hasAnyImage = false;
     
+    if (!hasAnyImage) return; // No images loaded yet
+    
     inputViewports.forEach(viewport => {
         const element = document.getElementById(viewport.id);
         const img = element?.querySelector('img');
@@ -263,8 +291,6 @@ function resizeAllInputViewportsToSmallest() {
             minHeight = Math.min(minHeight, img.naturalHeight);
         }
     });
-    
-    if (!hasAnyImage) return; // No images loaded yet
     
     // Calculate aspect ratio from smallest image
     const aspectRatio = minWidth / minHeight;
@@ -300,16 +326,19 @@ function resizeAllInputViewportsToSmallest() {
  */
 
 /**
- * Initialize drag-based brightness/contrast adjustments for input viewports
+ * Initialize drag-based brightness/contrast adjustments for input and output viewports
  * 
  * Interaction Model:
  * - Mouse drag up/down: Adjust brightness (0.0 to 2.0)
  * - Mouse drag left/right: Adjust contrast (0.0 to 3.0)
  * 
- * Design: Display-only adjustments (does NOT affect FFT calculations)
+ * Design: 
+ * - Input viewports: Display-only adjustments (does NOT affect FFT calculations)
+ * - Output viewports: Client-side canvas adjustments
  * Backend always uses original unmodified images for frequency domain operations
  */
 function initializeViewportDrag() {
+    // Initialize input viewports (1-4)
     for (let i = 1; i <= 4; i++) {
         const viewport = document.getElementById(`input-viewport-${i}`);
         const imageKey = `img${i}`;
@@ -331,7 +360,45 @@ function initializeViewportDrag() {
                 startX: e.clientX,
                 startY: e.clientY,
                 initialBrightness: state.adjustments[imageKey].brightness,
-                initialContrast: state.adjustments[imageKey].contrast
+                initialContrast: state.adjustments[imageKey].contrast,
+                isOutput: false
+            };
+            
+            viewport.classList.add('dragging');
+            showAdjustmentIndicator(state.dragState.initialBrightness, state.dragState.initialContrast);
+            
+            // Attach global mouse move/up handlers for smooth dragging
+            document.addEventListener('mousemove', handleDrag);
+            document.addEventListener('mouseup', handleDragEnd);
+        });
+    }
+    
+    // Initialize output viewports (1-2)
+    for (let i = 1; i <= 2; i++) {
+        const viewport = document.getElementById(`output-viewport-${i}`);
+        const outputKey = `output${i}`;
+        
+        viewport.addEventListener('mousedown', (e) => {
+            // Only respond to left mouse button
+            if (e.button !== 0) return;
+            
+            // Only allow adjustment if output image exists
+            const img = viewport.querySelector('img');
+            if (!img) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Initialize drag state with current adjustment values
+            state.dragState = {
+                viewport: viewport,
+                outputKey: outputKey,
+                outputIndex: i,
+                startX: e.clientX,
+                startY: e.clientY,
+                initialBrightness: state.outputAdjustments[outputKey].brightness,
+                initialContrast: state.outputAdjustments[outputKey].contrast,
+                isOutput: true
             };
             
             viewport.classList.add('dragging');
@@ -375,11 +442,18 @@ function handleDrag(e) {
     const contrast = state.dragState.initialContrast + (deltaX / 300);
     const clampedContrast = Math.max(0.0, Math.min(3.0, contrast));
     
-    // Update state with clamped values
-    state.adjustments[state.dragState.imageKey] = {
-        brightness: clampedBrightness,
-        contrast: clampedContrast
-    };
+    // Update state based on viewport type
+    if (state.dragState.isOutput) {
+        state.outputAdjustments[state.dragState.outputKey] = {
+            brightness: clampedBrightness,
+            contrast: clampedContrast
+        };
+    } else {
+        state.adjustments[state.dragState.imageKey] = {
+            brightness: clampedBrightness,
+            contrast: clampedContrast
+        };
+    }
     
     // Update real-time visual indicator
     showAdjustmentIndicator(clampedBrightness, clampedContrast);
@@ -388,9 +462,9 @@ function handleDrag(e) {
 /**
  * Finalize brightness/contrast adjustment on mouse release
  * 
- * Design Decision: Display-only adjustments
- * - Sends adjustments to backend for image processing
- * - Updates displayed image with adjusted version
+ * Design Decision:
+ * - Input viewports: Display-only adjustments via backend
+ * - Output viewports: Client-side canvas adjustments
  * - Does NOT trigger FFT recalculation
  * - Backend FFT operations always use original unmodified images
  * 
@@ -400,41 +474,59 @@ function handleDrag(e) {
 async function handleDragEnd() {
     if (!state.dragState) return;
     
-    const imageKey = state.dragState.imageKey;
-    const index = state.dragState.index;
-    const adjustments = state.adjustments[imageKey];
-    
     state.dragState.viewport.classList.remove('dragging');
     
-    // Auto-hide adjustment indicator
-    setTimeout(() => {
-        hideAdjustmentIndicator();
-    }, 500);
+    hideAdjustmentIndicator();
     
-    // Apply display-only adjustments via backend
     try {
-        const response = await fetch('/api/apply-adjustments/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                image_key: imageKey,
-                brightness: adjustments.brightness,
-                contrast: adjustments.contrast,
-                reference: 'original' // Always reference original image
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            // Update displayed image (visual only)
-            state.images[imageKey] = data.adjusted_image;
-            displayImage(`input-viewport-${index}`, data.adjusted_image);
+        if (state.dragState.isOutput) {
+            // Output viewport: Apply adjustments via backend
+            const outputKey = state.dragState.outputKey;
+            const outputIndex = state.dragState.outputIndex;
+            const adjustments = state.outputAdjustments[outputKey];
             
-            // Refresh filter rectangle positioning
-            setTimeout(() => {
-                updateAllRectangles();
-            }, 100);
+            const response = await fetch('/api/apply-output-adjustments/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    output_key: outputKey,
+                    brightness: adjustments.brightness,
+                    contrast: adjustments.contrast
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                displayImage(`output-viewport-${outputIndex}`, data.adjusted_image);
+            }
+        } else {
+            // Input viewport: Apply display-only adjustments via backend
+            const imageKey = state.dragState.imageKey;
+            const index = state.dragState.index;
+            const adjustments = state.adjustments[imageKey];
+            
+            const response = await fetch('/api/apply-adjustments/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image_key: imageKey,
+                    brightness: adjustments.brightness,
+                    contrast: adjustments.contrast,
+                    reference: 'original'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                state.images[imageKey] = data.adjusted_image;
+                displayImage(`input-viewport-${index}`, data.adjusted_image);
+                
+                setTimeout(() => {
+                    updateAllRectangles();
+                }, 100);
+            }
         }
     } catch (error) {
         console.error('Failed to apply adjustments:', error);
@@ -446,170 +538,7 @@ async function handleDragEnd() {
     document.removeEventListener('mouseup', handleDragEnd);
 }
 
-/**
- * =============================================================================
- * OUTPUT VIEWPORT BRIGHTNESS/CONTRAST ADJUSTMENTS
- * =============================================================================
- */
 
-/**
- * Initialize drag-based brightness/contrast for output viewports
- * 
- * Design: Client-side canvas-based adjustments
- * - Preserves original mixed output in state[`originalOutput${i}`]
- * - Applies adjustments via canvas manipulation
- * - Does not send image data back to backend
- * - Allows visual tuning of final output without remixing
- */
-function initializeOutputViewportDrag() {
-    for (let i = 1; i <= 2; i++) {
-        const viewport = document.getElementById(`output-viewport-${i}`);
-        const outputKey = `output${i}`;
-        
-        viewport.addEventListener('mousedown', (e) => {
-            // Only left mouse button
-            if (e.button !== 0) return;
-            
-            // Only allow adjustment if output image exists
-            const img = viewport.querySelector('img');
-            if (!img) return;
-            
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Initialize output drag state
-            state.dragState = {
-                viewport: viewport,
-                outputKey: outputKey,
-                outputIndex: i,
-                startX: e.clientX,
-                startY: e.clientY,
-                initialBrightness: state.outputAdjustments[outputKey].brightness,
-                initialContrast: state.outputAdjustments[outputKey].contrast,
-                isOutput: true // Flag to distinguish from input viewport drag
-            };
-            
-            viewport.classList.add('dragging');
-            showAdjustmentIndicator(state.dragState.initialBrightness, state.dragState.initialContrast);
-            
-            // Attach global handlers
-            document.addEventListener('mousemove', handleOutputDrag);
-            document.addEventListener('mouseup', handleOutputDragEnd);
-        });
-    }
-}
-
-/**
- * Handle mouse move during output viewport brightness/contrast drag
- * @param {MouseEvent} e - Mouse move event
- * 
- * Identical controls to input viewport drag:
- * - Vertical: Brightness (0.0 - 2.0)
- * - Horizontal: Contrast (0.0 - 3.0)
- */
-function handleOutputDrag(e) {
-    if (!state.dragState || !state.dragState.isOutput) return;
-    
-    const deltaX = e.clientX - state.dragState.startX;
-    const deltaY = e.clientY - state.dragState.startY;
-    
-    // Calculate and clamp brightness
-    const brightness = state.dragState.initialBrightness - (deltaY / 300);
-    const clampedBrightness = Math.max(0.0, Math.min(2.0, brightness));
-    
-    // Calculate and clamp contrast
-    const contrast = state.dragState.initialContrast + (deltaX / 300);
-    const clampedContrast = Math.max(0.0, Math.min(3.0, contrast));
-    
-    // Update output adjustment state
-    state.outputAdjustments[state.dragState.outputKey] = {
-        brightness: clampedBrightness,
-        contrast: clampedContrast
-    };
-    
-    // Update real-time indicator
-    showAdjustmentIndicator(clampedBrightness, clampedContrast);
-}
-
-async function handleOutputDragEnd() {
-    if (!state.dragState || !state.dragState.isOutput) return;
-    
-    const outputKey = state.dragState.outputKey;
-    const outputIndex = state.dragState.outputIndex;
-    const adjustments = state.outputAdjustments[outputKey];
-    
-    state.dragState.viewport.classList.remove('dragging');
-    
-    hideAdjustmentIndicator();
-    
-    // Apply adjustments to output image using canvas
-    try {
-        const viewport = document.getElementById(`output-viewport-${outputIndex}`);
-        const img = viewport.querySelector('img');
-        if (!img || !img.complete) {
-            state.dragState = null;
-            document.removeEventListener('mousemove', handleOutputDrag);
-            document.removeEventListener('mouseup', handleOutputDragEnd);
-            return;
-        }
-        
-        // Store original image if not already stored
-        if (!state[`originalOutput${outputIndex}`]) {
-            state[`originalOutput${outputIndex}`] = img.src;
-        }
-        
-        // Apply adjustments using canvas
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Load original output image
-        const originalImg = new Image();
-        originalImg.onload = () => {
-            canvas.width = originalImg.width;
-            canvas.height = originalImg.height;
-            
-            // Draw original image
-            ctx.drawImage(originalImg, 0, 0);
-            
-            // Get image data
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-            
-            // Apply brightness and contrast (same as input viewports)
-            for (let i = 0; i < data.length; i += 4) {
-                // Apply brightness (multiplier)
-                let r = data[i] * adjustments.brightness;
-                let g = data[i + 1] * adjustments.brightness;
-                let b = data[i + 2] * adjustments.brightness;
-                
-                // Apply contrast (scale around midpoint 127.5)
-                r = (r - 127.5) * adjustments.contrast + 127.5;
-                g = (g - 127.5) * adjustments.contrast + 127.5;
-                b = (b - 127.5) * adjustments.contrast + 127.5;
-                
-                // Clamp values
-                data[i] = Math.max(0, Math.min(255, r));
-                data[i + 1] = Math.max(0, Math.min(255, g));
-                data[i + 2] = Math.max(0, Math.min(255, b));
-            }
-            
-            // Put modified image data back
-            ctx.putImageData(imageData, 0, 0);
-            
-            // Update viewport with adjusted image
-            img.src = canvas.toDataURL('image/png');
-        };
-        
-        originalImg.src = state[`originalOutput${outputIndex}`];
-        
-    } catch (error) {
-        console.error('Failed to apply output adjustments:', error);
-    }
-    
-    state.dragState = null;
-    document.removeEventListener('mousemove', handleOutputDrag);
-    document.removeEventListener('mouseup', handleOutputDragEnd);
-}
 
 // Adjustment Indicator Functions
 let adjustmentTimeout = null;
@@ -639,19 +568,6 @@ function hideAdjustmentIndicator() {
     clearTimeout(adjustmentTimeout);
 }
 
-// Component Viewport Brightness/Contrast - DISABLED for FT viewports
-function initializeComponentViewportDrag() {
-    // FT viewports do NOT accept brightness/contrast adjustments
-    // This function is intentionally disabled per requirements
-}
-
-function handleComponentDrag(e) {
-    // DISABLED - FT viewports should not have brightness/contrast adjustments
-}
-
-function handleComponentDragEnd() {
-    // DISABLED - FT viewports should not have brightness/contrast adjustments
-}
 
 /**
  * =============================================================================
@@ -925,7 +841,8 @@ async function performMixing() {
                 modes: Object.fromEntries(Object.keys(state.images).map(key => [key, state.mixingMode])), // Unified mode for all images
                 weights_a: state.weightsA,   // Component A weights
                 weights_b: state.weightsB,   // Component B weights
-                region: regionParams         // Frequency filter configuration
+                region: regionParams,        // Frequency filter configuration
+                output_key: `output${state.selectedOutput}` // Store in backend for adjustments
             }),
             signal: controller.signal
         });
@@ -933,9 +850,6 @@ async function performMixing() {
         const data = await response.json();
         
         if (data.success) {
-            // Preserve original output for adjustment operations
-            state[`originalOutput${state.selectedOutput}`] = data.output_image;
-            
             // Reset output adjustments to default
             state.outputAdjustments[`output${state.selectedOutput}`] = {
                 brightness: 1.0,
@@ -994,21 +908,12 @@ async function autoResize() {
         const data = await response.json();
         
         if (data.success) {
-            // Reload all input and component images to reflect resize
+            // Update all images from response (no redundant fetches)
             for (let i = 1; i <= 4; i++) {
                 const imageKey = `img${i}`;
-                if (state.images[imageKey]) {
-                    // Fetch updated input image after resize
-                    try {
-                        const imgResponse = await fetch(`/api/get-image/${imageKey}/`);
-                        const imgData = await imgResponse.json();
-                        if (imgData.success) {
-                            state.images[imageKey] = imgData.image;
-                            displayImage(`input-viewport-${i}`, imgData.image);
-                        }
-                    } catch (err) {
-                        console.error(`Failed to reload ${imageKey}:`, err);
-                    }
+                if (data.images[imageKey]) {
+                    state.images[imageKey] = data.images[imageKey];
+                    displayImage(`input-viewport-${i}`, data.images[imageKey]);
                     
                     // Update component preview (triggers FFT recalculation with resized image)
                     updateComponentPreview(i);
@@ -1020,10 +925,6 @@ async function autoResize() {
     }
 }
 
-// Button Actions - removed, now automated
-function initializeButtons() {
-    // No manual buttons
-}
 
 // Frequency Filter Controls
 function initializeFilterControls() {
@@ -1094,16 +995,14 @@ function initializeFilterControls() {
         filterInner.checked = true;
         updateAllRectangles();
         updateFilterMode();
+        performMixing();
     });
     
     // Initialize interactive rectangles for all 4 viewports
     for (let i = 1; i <= 4; i++) {
         initializeInteractiveRectangle(i);
     }
-    
-    // Initialize rectangle positions
-    updateAllRectangles();
-    updateFilterMode();
+
 }
 
 function initializeInteractiveRectangle(index) {
@@ -1112,10 +1011,6 @@ function initializeInteractiveRectangle(index) {
     const viewport = document.getElementById(`component-viewport-${index}`);
     
     // Verify elements exist before proceeding
-    if (!overlay || !rectangle || !viewport) {
-        console.warn(`Filter overlay elements not found for viewport ${index}`);
-        return;
-    }
     
     // Make rectangle draggable
     rectangle.addEventListener('mousedown', (e) => {

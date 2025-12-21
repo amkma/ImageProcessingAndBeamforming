@@ -67,6 +67,9 @@ class ImageViewer:
         self.original_images = {}  # Immutable originals (pre-adjustment)
         self.last_adjustments = {}  # Cumulative brightness/contrast tracking
         self.fft_cache = {}  # Pre-computed FFT components for instant access
+        self.output_images = {}  # Output images from mixing (output1, output2)
+        self.original_output_images = {}  # Original outputs for adjustment reference
+        self.output_adjustments = {}  # Output adjustment tracking
         
     def load_image(self, image_key, image_data):
         """Load image with grayscale conversion and FFT pre-computation.
@@ -138,7 +141,7 @@ class ImageViewer:
         - Cache storage: O(1) dictionary insertion
         """
         fft_result = np.fft.fftshift(np.fft.fft2(image_array))
-        self.fft_cache[image_key] = {
+        self.fft_cache[image_key] = { # imgx
             'fft': fft_result,
             'magnitude': np.abs(fft_result),  # Vectorized magnitude
             'phase': np.angle(fft_result),    # Vectorized phase
@@ -286,6 +289,56 @@ class ImageViewer:
         fft_cache = self._get_fft(image_key)
         return fft_cache['imaginary']
     
+    def get_fft_component_visualization(self, image_key, component='magnitude'):
+        """Retrieve FFT component with visualization transformation applied.
+        
+        Applies appropriate visualization for display:
+        - Magnitude: Log scaling to enhance low-frequency visibility
+        - Phase/Real/Imaginary: Direct normalization
+        
+        Args:
+            image_key (str): Image identifier
+            component (str): Component type ('magnitude', 'phase', 'real', 'imaginary')
+            
+        Returns:
+            str: Base64-encoded PNG image ready for frontend display
+            
+        Visualization Algorithm:
+        - Magnitude: display = log(magnitude + 1) → normalize to [0, 255]
+        - Others: display = component → normalize to [0, 255]
+        - Normalization: (value - min) / (max - min) * 255
+        
+        Performance:
+        - O(n²) for log/normalization operations (vectorized)
+        - No FFT computation (uses cached data)
+        """
+        # Retrieve pre-computed FFT component from cache
+        if component == 'magnitude':
+            result = self.get_magnitude(image_key)
+        elif component == 'phase':
+            result = self.get_phase(image_key)
+        elif component == 'real':
+            result = self.get_real(image_key)
+        elif component == 'imaginary':
+            result = self.get_imaginary(image_key)
+        else:
+            raise ValueError(f"Invalid component type: {component}")
+        
+        # Apply visualization transformation
+        # Log scale for magnitude (enhances low-frequency visibility)
+        if component == 'magnitude':
+            display = np.log(result + 1)
+        else:
+            display = result
+        
+        # Normalize to [0, 255] for display
+        display = display - display.min()
+        if display.max() > 0:
+            display = display / display.max() * 255
+        
+        # Convert to base64 for frontend rendering
+        return self.image_to_base64(display)
+    
     def mix_images(self, modes, weights_a, weights_b, region_params):
         """Frequency domain mixing with Unified Region Model and IFFT.
         
@@ -337,9 +390,7 @@ class ImageViewer:
         - Full spectrum: x=0, y=0, w=1.0, h=1.0, type='inner'
         - Custom filter: user-defined rectangle with inner/outer type
         """
-        # Early return: validate weights provided
-        if not weights_a:
-            return None
+
             
         # Find valid reference image for dimensions
         first_key = next(iter(weights_a.keys()))
@@ -492,7 +543,7 @@ class ImageViewer:
             mask[y_start:y_end, x_start:x_end] = 0.0
         
         return mask
-    
+
     def apply_brightness_contrast(self, image_key, brightness, contrast, reference='original'):
         """Apply brightness and contrast adjustments with dual reference modes.
         
@@ -576,31 +627,6 @@ class ImageViewer:
                 'contrast': contrast
             }
             
-        elif reference == 'current':
-            # RELATIVE MODE: Apply delta from last-applied values
-            last_b = self.last_adjustments[image_key]['brightness']
-            last_c = self.last_adjustments[image_key]['contrast']
-            
-            # Start from current displayed state
-            source_image = self.images[image_key].copy()
-            
-            # Apply brightness delta (ratio-based to avoid compounding)
-            if last_b > 0:
-                adjusted = source_image * (brightness / last_b)
-            else:
-                adjusted = source_image * brightness
-            
-            # Apply contrast delta (ratio-based)
-            if last_c > 0:
-                adjusted = (adjusted - 127.5) * (contrast / last_c) + 127.5
-            else:
-                adjusted = (adjusted - 127.5) * contrast + 127.5
-            
-            # Track new cumulative values
-            self.last_adjustments[image_key] = {
-                'brightness': brightness,
-                'contrast': contrast
-            }
         else:
             raise ValueError(f"Invalid reference mode: {reference}")
         
@@ -610,21 +636,70 @@ class ImageViewer:
         # Return display-only adjustment (does NOT persist to cache)
         return adjusted, adjusted.shape, brightness, contrast
     
-    def clear_images(self):
-        """Clear all session state and reset viewer.
+    def apply_output_adjustments(self, output_key, brightness, contrast):
+        """Apply brightness/contrast adjustments to output viewport images.
         
-        Clears:
-        - images: Currently displayed versions
-        - original_images: Immutable originals
-        - last_adjustments: Brightness/contrast tracking
-        - fft_cache: Pre-computed FFT components
+        Similar to apply_brightness_contrast but for output viewports (output1, output2).
+        Always uses 'original' reference mode - adjustments relative to original mixed output.
         
-        Performance: O(1) dictionary clear operations
+        Args:
+            output_key (str): Output identifier ('output1' or 'output2')
+            brightness (float): Brightness multiplier [0.00, 2.00]
+            contrast (float): Contrast multiplier [0.00, 3.00]
+        
+        Returns:
+            tuple: (adjusted_image, shape, applied_brightness, applied_contrast)
+        
+        Raises:
+            ValueError: If output_key not found
+        
+        Performance: O(n²) vectorized operations
         """
-        self.images.clear()
-        self.original_images.clear()
-        self.last_adjustments.clear()
-        self.fft_cache.clear()
+        if output_key not in self.original_output_images:
+            raise ValueError(f"Output '{output_key}' not available")
+        
+        # Validate and clamp to safe ranges
+        brightness = max(0.0, min(2.0, float(brightness)))
+        contrast = max(0.0, min(3.0, float(contrast)))
+        
+        # Apply to original output (absolute mode only)
+        source_image = self.original_output_images[output_key].copy()
+        
+        # Apply brightness (vectorized multiplication)
+        adjusted = source_image * brightness
+        
+        # Apply contrast (vectorized: center around midpoint, scale, re-center)
+        adjusted = (adjusted - 127.5) * contrast + 127.5
+        
+        # Clip to valid display range [0, 255]
+        adjusted = np.clip(adjusted, 0, 255)
+        
+        # Track adjustments
+        self.output_adjustments[output_key] = {
+            'brightness': brightness,
+            'contrast': contrast
+        }
+        
+        # Update current output image
+        self.output_images[output_key] = adjusted
+        
+        return adjusted, adjusted.shape, brightness, contrast
+    
+    def store_output_image(self, output_key, image_array):
+        """Store output image from mixing operation.
+        
+        Args:
+            output_key (str): Output identifier ('output1' or 'output2')
+            image_array (np.ndarray): Mixed output image
+        """
+        self.output_images[output_key] = image_array.copy()
+        self.original_output_images[output_key] = image_array.copy()
+        # Reset adjustments to neutral
+        self.output_adjustments[output_key] = {
+            'brightness': 1.0,
+            'contrast': 1.0
+        }
+    
     
     def get_loaded_images(self):
         """Retrieve list of loaded image identifiers.
@@ -635,6 +710,20 @@ class ImageViewer:
         Performance: O(k) where k = number of loaded images
         """
         return list(self.images.keys())
+    
+    def get_all_images_as_base64(self):
+        """Get all loaded images as base64-encoded strings.
+        
+        Returns:
+            dict: {image_key: base64_string} for all loaded images
+            
+        Performance: O(k × n²) where k = number of loaded images, n² = image pixels
+        """
+        return {
+            key: self.image_to_base64(img)
+            for key, img in self.images.items()
+            if img is not None
+        }
     
     def image_to_base64(self, image_array):
         """Convert NumPy array to base64-encoded PNG for web display.

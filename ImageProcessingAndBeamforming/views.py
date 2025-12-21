@@ -325,6 +325,52 @@ def apply_output_adjustments(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+@csrf_exempt
+def apply_component_adjustments(request):
+    """Apply brightness/contrast adjustments to FFT component viewport.
+    
+    Controller: Parses adjustment parameters, delegates to ImageViewer.
+    
+    POST Parameters:
+        - image_key (str): Image identifier ('img1'-'img4')
+        - component (str): Component type ('magnitude', 'phase', 'real', 'imaginary')
+        - brightness (float): Multiplier [0.0-2.0], default 1.0
+        - contrast (float): Multiplier [0.0-3.0], default 1.0
+    
+    Returns:
+        JsonResponse with adjusted component visualization
+    """
+    try:
+        data = json.loads(request.body)
+        image_key = data.get('image_key')
+        component = data.get('component')
+        brightness = float(data.get('brightness', 1.0))
+        contrast = float(data.get('contrast', 1.0))
+
+        if not image_key or not component:
+            return JsonResponse({'error': 'Missing image_key or component'}, status=400)
+
+        # Delegate to ImageViewer for component adjustment processing
+        adjusted_image, shape, applied_brightness, applied_contrast = viewer.apply_component_adjustments(
+            image_key, component, brightness, contrast
+        )
+
+        adjusted_base64 = viewer.image_to_base64(adjusted_image)
+
+        return JsonResponse({
+            'success': True,
+            'image_key': image_key,
+            'component': component,
+            'adjusted_image': adjusted_base64,
+            'shape': shape,
+            'applied_brightness': applied_brightness,
+            'applied_contrast': applied_contrast
+        })
+
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 # =============================================================================
 # SESSION MANAGEMENT AND STATUS API
 # =============================================================================

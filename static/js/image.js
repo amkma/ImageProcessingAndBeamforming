@@ -44,6 +44,12 @@ class ImageMixerApp {
                 output1: { brightness: 1.0, contrast: 1.0 },
                 output2: { brightness: 1.0, contrast: 1.0 }
             },
+            componentAdjustments: {
+                img1: { brightness: 1.0, contrast: 1.0 },
+                img2: { brightness: 1.0, contrast: 1.0 },
+                img3: { brightness: 1.0, contrast: 1.0 },
+                img4: { brightness: 1.0, contrast: 1.0 }
+            },
             mixingMode: 'magnitude_phase',
             weightsA: { img1: 0, img2: 0, img3: 0, img4: 0 },
             weightsB: { img1: 0, img2: 0, img3: 0, img4: 0 },
@@ -374,6 +380,44 @@ class ImageMixerApp {
                 document.addEventListener('mouseup', () => this.handleDragEnd());
             });
         }
+        
+        // Component viewport drag (brightness/contrast for FFT components)
+        for (let i = 1; i <= 4; i++) {
+            const imageKey = `img${i}`;
+            const viewport = document.getElementById(`component-viewport-${i}`);
+            
+            viewport.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                
+                const img = viewport.querySelector('img');
+                if (!img) return;
+                
+                // Don't interfere with filter rectangle drag
+                if (e.target.closest('.filter-rectangle') || e.target.closest('.resize-handle')) {
+                    return;
+                }
+                
+                e.preventDefault();
+                e.stopPropagation();
+                
+                this.state.dragState = {
+                    viewport: viewport,
+                    imageKey: imageKey,
+                    componentIndex: i,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    initialBrightness: this.state.componentAdjustments[imageKey].brightness,
+                    initialContrast: this.state.componentAdjustments[imageKey].contrast,
+                    isComponent: true
+                };
+                
+                viewport.classList.add('dragging');
+                this.showAdjustmentIndicator(this.state.dragState.initialBrightness, this.state.dragState.initialContrast);
+                
+                document.addEventListener('mousemove', (e) => this.handleDrag(e));
+                document.addEventListener('mouseup', () => this.handleDragEnd());
+            });
+        }
     }
 
     /**
@@ -407,6 +451,11 @@ class ImageMixerApp {
         
         if (this.state.dragState.isOutput) {
             this.state.outputAdjustments[this.state.dragState.outputKey] = {
+                brightness: clampedBrightness,
+                contrast: clampedContrast
+            };
+        } else if (this.state.dragState.isComponent) {
+            this.state.componentAdjustments[this.state.dragState.imageKey] = {
                 brightness: clampedBrightness,
                 contrast: clampedContrast
             };
@@ -459,6 +508,45 @@ class ImageMixerApp {
                 
                 if (data.success) {
                     this.displayImage(`output-viewport-${outputIndex}`, data.adjusted_image);
+                } else {
+                    console.warn(`Output adjustment failed: ${data.error}`);
+                    // Reset adjustments to neutral if output doesn't exist
+                    this.state.outputAdjustments[outputKey] = {
+                        brightness: 1.0,
+                        contrast: 1.0
+                    };
+                }
+            } else if (this.state.dragState.isComponent) {
+                const imageKey = this.state.dragState.imageKey;
+                const componentIndex = this.state.dragState.componentIndex;
+                const adjustments = this.state.componentAdjustments[imageKey];
+                const component = document.getElementById(`component-select-${componentIndex}`).value;
+                
+                const response = await fetch('/api/apply-component-adjustments/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        image_key: imageKey,
+                        component: component,
+                        brightness: adjustments.brightness,
+                        contrast: adjustments.contrast
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const viewport = document.getElementById(`component-viewport-${componentIndex}`);
+                    const overlay = document.getElementById(`filter-overlay-${componentIndex}`);
+                    const overlayParent = overlay.parentNode;
+                    overlayParent.removeChild(overlay);
+                    
+                    this.displayImage(`component-viewport-${componentIndex}`, data.adjusted_image);
+                    
+                    viewport.appendChild(overlay);
+                    this.updateAllRectangles();
+                } else {
+                    console.warn(`Component adjustment failed: ${data.error}`);
                 }
             } else {
                 const imageKey = this.state.dragState.imageKey;
@@ -635,6 +723,12 @@ class ImageMixerApp {
         overlayParent.removeChild(overlay);
         
         viewport.innerHTML = '<span class="placeholder">Loading...</span>';
+        
+        // Reset adjustments to neutral when component changes
+        this.state.componentAdjustments[imageKey] = {
+            brightness: 1.0,
+            contrast: 1.0
+        };
         
         try {
             const response = await fetch('/api/fft/', {

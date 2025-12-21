@@ -70,6 +70,9 @@ class ImageViewer:
         self.output_images = {}  # Output images from mixing (output1, output2)
         self.original_output_images = {}  # Original outputs for adjustment reference
         self.output_adjustments = {}  # Output adjustment tracking
+        self.component_visualizations = {}  # Currently displayed component visualizations
+        self.original_component_visualizations = {}  # Original component visualizations for adjustment reference
+        self.component_adjustments = {}  # Component viewport adjustment tracking
         
     def load_image(self, image_key, image_data):
         """Load image with grayscale conversion and FFT pre-computation.
@@ -335,6 +338,17 @@ class ImageViewer:
         display = display - display.min()
         if display.max() > 0:
             display = display / display.max() * 255
+        
+        # Store original visualization for adjustment reference
+        component_key = f"{image_key}_{component}"
+        self.original_component_visualizations[component_key] = display.copy()
+        self.component_visualizations[component_key] = display.copy()
+        
+        # Reset adjustments to neutral when component changes
+        self.component_adjustments[component_key] = {
+            'brightness': 1.0,
+            'contrast': 1.0
+        }
         
         # Convert to base64 for frontend rendering
         return self.image_to_base64(display)
@@ -699,6 +713,58 @@ class ImageViewer:
             'brightness': 1.0,
             'contrast': 1.0
         }
+    
+    def apply_component_adjustments(self, image_key, component, brightness, contrast):
+        """Apply brightness/contrast adjustments to FFT component visualization.
+        
+        Always references original component visualization (like input/output viewports).
+        Adjustments are display-only and do not affect FFT cache or mixing operations.
+        
+        Args:
+            image_key (str): Image identifier ('img1'-'img4')
+            component (str): Component type ('magnitude', 'phase', 'real', 'imaginary')
+            brightness (float): Brightness multiplier [0.00, 2.00]
+            contrast (float): Contrast multiplier [0.00, 3.00]
+        
+        Returns:
+            tuple: (adjusted_image, shape, applied_brightness, applied_contrast)
+        
+        Raises:
+            ValueError: If component visualization not found
+        
+        Performance: O(n²) vectorized operations on visualization
+        """
+        component_key = f"{image_key}_{component}"
+        
+        if component_key not in self.original_component_visualizations:
+            raise ValueError(f"Component visualization '{component_key}' not found. Load image and select component first.")
+        
+        # Validate and clamp to safe ranges
+        brightness = max(0.0, min(2.0, float(brightness)))
+        contrast = max(0.0, min(3.0, float(contrast)))
+        
+        # Apply to original component visualization (absolute mode - always reference original)
+        source_image = self.original_component_visualizations[component_key].copy()
+        
+        # Apply brightness (vectorized multiplication)
+        adjusted = source_image * brightness
+        
+        # Apply contrast (vectorized: center around midpoint, scale, re-center)
+        adjusted = (adjusted - 127.5) * contrast + 127.5
+        
+        # Clip to valid display range [0, 255]
+        adjusted = np.clip(adjusted, 0, 255)
+        
+        # Track adjustments
+        self.component_adjustments[component_key] = {
+            'brightness': brightness,
+            'contrast': contrast
+        }
+        
+        # Update current visualization
+        self.component_visualizations[component_key] = adjusted
+        
+        return adjusted, adjusted.shape, brightness, contrast
     
     
     def get_loaded_images(self):

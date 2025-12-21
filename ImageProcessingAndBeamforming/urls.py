@@ -20,7 +20,8 @@ urlpatterns = [
     path('api/mix/', views.mix_images, name='mix_images'),
     path('api/apply-adjustments/', views.apply_adjustments, name='apply_adjustments'),
     path('api/apply-output-adjustments/', views.apply_output_adjustments, name='apply_output_adjustments'),
-    # path('api/clear/', views.clear_images, name='clear_images'),
+    path('api/apply-component-adjustments/', views.apply_component_adjustments, name='apply_component_adjustments'),
+    # path('api/clear/', views.clear_images', name='clear_images'),
     # path('api/status/', views.get_status, name='get_status'),
 
     # Beamforming Simulator URLs (Pure Frontend - No Backend)

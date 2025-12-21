@@ -979,3 +979,118 @@ input[type=range]::-moz-range-thumb:hover {
         transition-duration: 0.01ms !important;
     }
 }
+
+//===============================================================================
+/* Add these styles to your existing beamforman.css file */
+
+/* Array Management Card */
+.card-custom[style*="border: 2px solid"] {
+    border: 2px solid var(--theme-accent) !important;
+}
+
+/* Input Group Styles */
+.input-group.input-group-sm {
+    margin-bottom: 8px;
+}
+
+.input-group .form-control-custom {
+    border-radius: 0 4px 4px 0;
+}
+
+.input-group .form-select {
+    border-radius: 4px 0 0 4px;
+}
+
+/* Array Control Buttons */
+.btn-group.w-100 .btn {
+    flex: 1;
+}
+
+.btn-simulator-danger {
+    background: linear-gradient(135deg, #ff4757 0%, #ff3838 100%);
+    border: 1px solid #ff3838;
+    color: white;
+}
+
+.btn-simulator-danger:hover {
+    background: linear-gradient(135deg, #ff3838 0%, #ff2e2e 100%);
+    border-color: #ff2e2e;
+}
+
+/* Small Range Sliders */
+.form-range-sm {
+    height: 6px;
+}
+
+/* Row Grid for Array Position */
+.row.g-2 {
+    margin-left: -4px;
+    margin-right: -4px;
+}
+
+.row.g-2 > [class*="col-"] {
+    padding-left: 4px;
+    padding-right: 4px;
+}
+
+/* Scrollable Frequencies */
+.scrollable-frequencies {
+    max-height: 200px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Frequency Sliders */
+.freq-slider {
+    height: 8px;
+    margin: 5px 0;
+}
+
+/* Text Styles */
+.text-secondary {
+    color: #94a3b8 !important;
+}
+
+.text-accent {
+    color: var(--theme-accent) !important;
+}
+
+.monospace {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85em;
+}
+
+/* Legend Styles */
+.legend-container {
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid var(--theme-accent);
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 0.85em;
+}
+
+/* Scenario Buttons */
+.scenario-btn.active {
+    background: linear-gradient(135deg, var(--theme-accent) 0%, #ffa500 100%);
+    border-color: var(--theme-accent);
+    color: white;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 1400px) {
+    .control-pane {
+        min-width: 350px;
+        max-width: 350px;
+    }
+    
+    .input-group .form-control {
+        max-width: 120px;
+    }
+}
+
+@media (max-width: 1200px) {
+    .control-pane {
+        min-width: 320px;
+        max-width: 320px;
+    }
+}

@@ -826,7 +826,6 @@ input[type=range]::-moz-range-thumb:hover {
     }
 }
 
-//================================================================
 /* Header Status Dot */
 .status-dot {
     width: 10px;

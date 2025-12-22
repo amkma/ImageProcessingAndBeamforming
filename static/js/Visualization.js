@@ -290,7 +290,7 @@ class Visualization {
         }];
 
         const layout = {
-            margin: { t: 20, b: 20, l: 30, r: 30 },
+            margin: { t: 10, b: 10, l: 40, r: 20 },
             paper_bgcolor: 'rgba(0,0,0,0)',
             plot_bgcolor: 'rgba(0,0,0,0)',
             font: { color: '#ff9000', family: 'Inter, sans-serif' },
@@ -313,7 +313,7 @@ class Visualization {
             },
             showlegend: true,
             legend: {
-                x: 1.1,
+                x: 0.96,
                 y: 0.5,
                 bgcolor: 'rgba(0,0,0,0.7)',
                 bordercolor: '#ff9000',

@@ -10,20 +10,20 @@
     <link rel="stylesheet" href="/static/css/beamforman.css">
 </head>
 <body>
-        <header class="app-header">
-            <div class="d-flex align-items-center justify-content-between px-4 py-2">
-                <div class="d-flex align-items-center">
-                    <div class="status-dot status-ready me-2" id="simStatus"></div>
-                    <h5 class="m-0 text-accent fw-bold">Image Mixer</h5>
-                </div>
-                <div class="d-flex align-items-center">
-                    <!-- MODE INDICATOR -->
-                    <a href="/" class="btn btn-sm btn-simulator-secondary ms-2">
-                        <i class="fas fa-home me-1"></i> Home
-                    </a>
-                </div>
+    <header class="app-header">
+        <div class="d-flex align-items-center justify-content-between px-4 py-2">
+            <div class="d-flex align-items-center">
+                <div class="status-dot status-ready me-2" id="simStatus"></div>
+                <h5 class="m-0 text-accent fw-bold">Image Mixer</h5>
             </div>
-        </header>
+            <div class="d-flex align-items-center">
+                <a href="/" class="btn btn-sm btn-simulator-secondary ms-2">
+                    <i class="fas fa-home me-1"></i> Home
+                </a>
+            </div>
+        </div>
+    </header>
+    
     <div class="split-container">
         <div class="left-panel">
             <div class="viewport-grid">
@@ -137,13 +137,13 @@
             </div>
 
             <div class="output-section">
-                <div class="viewport-container output-container">
+                <div class="viewport-container output-container" id="output-container-1">
                     <div class="viewport-label">OUTPUT 1</div>
                     <div class="viewport output-viewport" id="output-viewport-1">
                         <span class="placeholder">Mixed output will appear here</span>
                     </div>
                 </div>
-                <div class="viewport-container output-container">
+                <div class="viewport-container output-container" id="output-container-2">
                     <div class="viewport-label">OUTPUT 2</div>
                     <div class="viewport output-viewport" id="output-viewport-2">
                         <span class="placeholder">Mixed output will appear here</span>
@@ -232,16 +232,46 @@
         </div>
     </div>
     
- <div class="status-indicator" id="status-indicator">
-    <span id="status-text"></span>
-</div>
+    <div class="status-indicator" id="status-indicator">
+        <span id="status-text"></span>
+    </div>
 
-    
     <div class="adjustment-indicator" id="adjustment-indicator">
         <div class="adjustment-value">Brightness: <span id="adj-brightness">1.00</span></div>
         <div class="adjustment-value">Contrast: <span id="adj-contrast">1.00</span></div>
     </div>
 
-    <script src="/static/js/image.js"></script>
+    <!-- OOP Classes with Filter Rectangle Feature -->
+    <script src="/static/js/image/Viewport.js"></script>
+    <script src="/static/js/image/Image.js"></script>
+    <script src="/static/js/image/InputViewport.js"></script>
+    <script src="/static/js/image/ComponentViewport.js"></script>
+    <script src="/static/js/image/OutputViewport.js"></script>
+    <script src="/static/js/image/Filter.js"></script>
+    <script src="/static/js/image/ImageMixer.js"></script>
+    
+    <!-- Main entry point -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                // Create OOP instances
+                window.imageMixer = new ImageMixer();
+                window.imageMixer.initialize();
+                console.log('Image Mixer OOP initialized successfully');
+            } catch (error) {
+                console.error('Failed to initialize OOP Image Mixer:', error);
+                
+                // Fallback to original non-OOP code
+                console.log('Falling back to original implementation...');
+                // Load the original image.js
+                const script = document.createElement('script');
+                script.src = '/static/js/image_original.js';
+                script.onload = () => {
+                    console.log('Original image.js loaded as fallback');
+                };
+                document.head.appendChild(script);
+            }
+        });
+    </script>
 </body>
 </html>

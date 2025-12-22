@@ -3,18 +3,18 @@
  */
 // Enhanced Scenario Configurations with multiple arrays
 const SCENARIOS = {
-    '5g': {
+   '5g': {
         name: '5G Base Station',
         arrays: [
             {
                 name: 'Main 5G Array',
-                num_antennas: 4,
-                distance_m: 1.0,
-                delay_deg: 180,
+                num_antennas: 64,
+                distance_m: 20,
+                delay_deg: 64,
                 array_geometry: 'Linear',
                 curvature: 0,
                 frequencies: [2500000000, 2500000000, 2500000000, 2500000000],
-                spacing_mode: 'absolute',
+                spacing_mode: 'lambda',
                 positionX: 0,
                 positionY: 0,
                 rotation: 0
@@ -23,8 +23,8 @@ const SCENARIOS = {
         ],
         propagation_speed: 300000000,
         combined_delay: 0,
-        freqRange: { min: 1000000000, max: 5000000000, step: 10000000 }
-    },
+        freqRange: { min: 1000000000, max: 3500000000, step: 10000000 }
+   },
     'ultrasound': {
         name: 'Ultrasound Imaging',
         arrays: [
@@ -36,7 +36,7 @@ const SCENARIOS = {
                 frequencies: Array(7).fill(1000000),
                 array_geometry: 'Linear',
                 curvature: 0,
-                spacing_mode: 'absolute',
+                spacing_mode: 'lambda',
                 positionX: 0,
                 positionY: 0,
                 rotation: 0

@@ -622,21 +622,21 @@ class UIController {
         const array = this._getActiveArray();
         if (!array) {
             console.warn('No active array found for UI refresh');
-            // Create default array if none exists
+            
+            // FIXED: Don't create array here, just show warning
+            // The array should be created by BeamformingSimulator
             if (this._arrayManager.numArrays === 0) {
-                console.log('Creating default array');
-                this._arrayManager.createArray({
-                    name: 'Array 1',
-                    numAntennas: 8,
-                    spacing: 0.15
-                });
-                this._selectedArrayIndex = 0;
-                this._updateArraySelect();
-                // Recursive call to refresh with new array
-                this._refreshUI();
-                return;
+                console.error('CRITICAL: No arrays exist! This should not happen.');
+                // Show error in UI
+                if (this._elements.arrayInfo) {
+                    this._elements.arrayInfo.innerHTML = `
+                        <small class="text-danger">
+                            <i class="fas fa-exclamation-triangle"></i> No arrays exist!
+                        </small>
+                    `;
+                }
             }
-            return;
+            return; // Don't create array or do recursive call
         }
 
         console.log('Refreshing UI for array:', array.name);
@@ -1075,6 +1075,7 @@ class UIController {
      */
     initialize() {
         console.log('Initializing UIController...');
+        this._refreshUI();
         this._updateModeIndicator();
         this._updateArraySelect();
         

@@ -826,7 +826,10 @@ input[type=range]::-moz-range-thumb:hover {
     }
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> faa4de4186dbe514c8e6f38145f1fbb5c0841f0d
 /* Header Status Dot */
 .status-dot {
     width: 10px;

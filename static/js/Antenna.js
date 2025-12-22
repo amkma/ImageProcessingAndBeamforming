@@ -8,6 +8,7 @@ class Antenna {
         this._frequency = frequency;
         this._x = x;
         this._y = y;
+        this._propagationSpeed = 3e8; // Default propagation speed
     }
 
     // Getters
@@ -17,8 +18,10 @@ class Antenna {
     get y() { return this._y; }
     get wavelength() { return this._propagationSpeed / this._frequency; }
     get position() { return { x: this._x, y: this._y }; }
+    get propagationSpeed() { return this._propagationSpeed; }
 
     // Setters
+    set index(value) { this._index = value; }
     set frequency(freq) { this._frequency = freq; }
     set x(value) { this._x = value; }
     set y(value) { this._y = value; }
@@ -26,6 +29,7 @@ class Antenna {
         this._x = pos.x;
         this._y = pos.y;
     }
+    set propagationSpeed(value) { this._propagationSpeed = value; }
 
     /**
      * Calculate wave contribution at a specific point in space
@@ -37,15 +41,15 @@ class Antenna {
      * @returns {number} Wave amplitude at target point
      */
     calculateWaveContribution(targetX, targetY, phaseDelay, propagationSpeed, maxFrequency) {
-        const wavelength = propagationSpeed / this._frequency;
+        const wavelength = propagationSpeed / this.frequency;
         const k = 2 * Math.PI / wavelength;
 
-        const dx = targetX - this._x;
-        const dy = targetY - this._y;
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         const safeDistance = Math.max(distance, 0.001);
 
-        const freqScaling = this._frequency / maxFrequency;
+        const freqScaling = this.frequency / maxFrequency;
         const amplitude = 1.0 / Math.sqrt(safeDistance);
 
         return freqScaling * amplitude * Math.cos(k * safeDistance + phaseDelay);
@@ -60,13 +64,13 @@ class Antenna {
      * @returns {object} Real and imaginary components
      */
     calculateBeamContribution(azimuthRad, phaseDelay, propagationSpeed, maxFrequency) {
-        const wavelength = propagationSpeed / this._frequency;
+        const wavelength = propagationSpeed / this.frequency;
         const k = 2 * Math.PI / wavelength;
 
-        const r = Math.sqrt(this._x ** 2 + this._y ** 2);
-        const theta = Math.atan2(this._y, this._x);
+        const r = Math.sqrt(this.x ** 2 + this.y ** 2);
+        const theta = Math.atan2(this.y, this.x);
 
-        const freqScaling = this._frequency / maxFrequency;
+        const freqScaling = this.frequency / maxFrequency;
         const phaseTerm = -k * r * Math.cos(azimuthRad - theta) + phaseDelay;
 
         return {
@@ -80,7 +84,9 @@ class Antenna {
      * @returns {Antenna} New antenna instance with same properties
      */
     clone() {
-        return new Antenna(this._index, this._frequency, this._x, this._y);
+        const cloned = new Antenna(this.index, this.frequency, this.x, this.y);
+        cloned.propagationSpeed = this.propagationSpeed;
+        return cloned;
     }
 
     /**
@@ -89,10 +95,10 @@ class Antenna {
      */
     toJSON() {
         return {
-            index: this._index,
-            frequency: this._frequency,
-            x: this._x,
-            y: this._y
+            index: this.index,
+            frequency: this.frequency,
+            x: this.x,
+            y: this.y
         };
     }
 }

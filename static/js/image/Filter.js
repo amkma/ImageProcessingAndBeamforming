@@ -3,12 +3,47 @@
  */
 class Filter {
     constructor() {
-        this.mode = 'inner';
-        this.rect = { x: 0.25, y: 0.25, width: 0.5, height: 0.5 };
-        this.savedRectangle = null;
-        this.rectangleDragState = null;
+        this._mode = 'inner';
+        this._rect = { x: 0.25, y: 0.25, width: 0.5, height: 0.5 };
+        this._savedRectangle = null;
+        this._rectangleDragState = null;
+        this._updateDebounceTimer = null;
         
         this.initializeFilterControls();
+    }
+
+    // Getters
+    get mode() {
+        return this._mode;
+    }
+
+    get rect() {
+        return this._rect;
+    }
+
+    get savedRectangle() {
+        return this._savedRectangle;
+    }
+
+    get rectangleDragState() {
+        return this._rectangleDragState;
+    }
+
+    // Setters
+    set mode(value) {
+        this._mode = value;
+    }
+
+    set rect(value) {
+        this._rect = value;
+    }
+
+    set savedRectangle(value) {
+        this._savedRectangle = value;
+    }
+
+    set rectangleDragState(value) {
+        this._rectangleDragState = value;
     }
 
     initializeFilterControls() {
@@ -52,15 +87,15 @@ class Filter {
 
     setMode(mode) {
         if (mode === 'all') {
-            this.savedRectangle = { ...this.rect };
-            this.rect = { x: 0, y: 0, width: 1.0, height: 1.0 };
-            this.mode = 'inner';
+            this._savedRectangle = { ...this._rect };
+            this._rect = { x: 0, y: 0, width: 1.0, height: 1.0 };
+            this._mode = 'inner';
         } else {
-            if (this.savedRectangle && mode === 'inner') {
-                this.rect = { ...this.savedRectangle };
-                this.savedRectangle = null;
+            if (this._savedRectangle && mode === 'inner') {
+                this._rect = { ...this._savedRectangle };
+                this._savedRectangle = null;
             }
-            this.mode = mode;
+            this._mode = mode;
         }
         
         this.updateAllRectangles();
@@ -69,9 +104,9 @@ class Filter {
     }
 
     reset() {
-        this.mode = 'inner';
-        this.rect = { x: 0.25, y: 0.25, width: 0.5, height: 0.5 };
-        this.savedRectangle = null;
+        this._mode = 'inner';
+        this._rect = { x: 0.25, y: 0.25, width: 0.5, height: 0.5 };
+        this._savedRectangle = null;
         
         // Update UI
         const filterInner = document.getElementById('filter-inner');
@@ -93,7 +128,7 @@ class Filter {
             const rectBounds = rectangle.getBoundingClientRect();
             const viewportBounds = viewport.getBoundingClientRect();
             
-            this.rectangleDragState = {
+            this._rectangleDragState = {
                 type: 'move',
                 sourceIndex: index,
                 startX: e.clientX,
@@ -120,7 +155,7 @@ class Filter {
                 const viewportBounds = viewport.getBoundingClientRect();
                 const handleType = handle.classList[1];
                 
-                this.rectangleDragState = {
+                this._rectangleDragState = {
                     type: 'resize',
                     sourceIndex: index,
                     handleType: handleType,
@@ -142,9 +177,9 @@ class Filter {
     }
 
     handleRectangleMove(e) {
-        if (!this.rectangleDragState || this.rectangleDragState.type !== 'move') return;
+        if (!this._rectangleDragState || this._rectangleDragState.type !== 'move') return;
         
-        const ds = this.rectangleDragState;
+        const ds = this._rectangleDragState;
         const deltaX = e.clientX - ds.startX;
         const deltaY = e.clientY - ds.startY;
         
@@ -152,23 +187,28 @@ class Filter {
         let newTop = ds.initialTop + deltaY;
         
         const rect = document.getElementById(`filter-rect-${ds.sourceIndex}`);
-        const rectWidth = parseFloat(rect.style.width) || (ds.viewportWidth * this.rect.width);
-        const rectHeight = parseFloat(rect.style.height) || (ds.viewportHeight * this.rect.height);
+        const rectWidth = parseFloat(rect.style.width) || (ds.viewportWidth * this._rect.width);
+        const rectHeight = parseFloat(rect.style.height) || (ds.viewportHeight * this._rect.height);
         
         newLeft = Math.max(0, Math.min(newLeft, ds.viewportWidth - rectWidth));
         newTop = Math.max(0, Math.min(newTop, ds.viewportHeight - rectHeight));
         
-        this.rect.x = newLeft / ds.viewportWidth;
-        this.rect.y = newTop / ds.viewportHeight;
+        this._rect.x = newLeft / ds.viewportWidth;
+        this._rect.y = newTop / ds.viewportHeight;
         
         this.updateAllRectangles();
-        this.dispatchChangeEvent();
+        
+        // Debounce change event during drag
+        clearTimeout(this._updateDebounceTimer);
+        this._updateDebounceTimer = setTimeout(() => {
+            this.dispatchChangeEvent();
+        }, 50);
     }
 
     handleRectangleResize(e) {
-        if (!this.rectangleDragState || this.rectangleDragState.type !== 'resize') return;
+        if (!this._rectangleDragState || this._rectangleDragState.type !== 'resize') return;
         
-        const ds = this.rectangleDragState;
+        const ds = this._rectangleDragState;
         const deltaX = e.clientX - ds.startX;
         const deltaY = e.clientY - ds.startY;
         
@@ -219,18 +259,23 @@ class Filter {
         newWidth = Math.min(newWidth, ds.viewportWidth - newLeft);
         newHeight = Math.min(newHeight, ds.viewportHeight - newTop);
         
-        this.rect.x = newLeft / ds.viewportWidth;
-        this.rect.y = newTop / ds.viewportHeight;
-        this.rect.width = newWidth / ds.viewportWidth;
-        this.rect.height = newHeight / ds.viewportHeight;
+        this._rect.x = newLeft / ds.viewportWidth;
+        this._rect.y = newTop / ds.viewportHeight;
+        this._rect.width = newWidth / ds.viewportWidth;
+        this._rect.height = newHeight / ds.viewportHeight;
         
         this.updateAllRectangles();
-        this.dispatchChangeEvent();
+        
+        // Debounce change event during resize
+        clearTimeout(this._updateDebounceTimer);
+        this._updateDebounceTimer = setTimeout(() => {
+            this.dispatchChangeEvent();
+        }, 50);
     }
 
     handleRectangleEnd() {
-        if (this.rectangleDragState) {
-            const rect = document.getElementById(`filter-rect-${this.rectangleDragState.sourceIndex}`);
+        if (this._rectangleDragState) {
+            const rect = document.getElementById(`filter-rect-${this._rectangleDragState.sourceIndex}`);
             if (rect) {
                 rect.classList.remove('dragging');
             }
@@ -240,15 +285,15 @@ class Filter {
             const filterInner = document.querySelector('#filter-inner');
             if (filterAll && filterAll.checked && filterInner) {
                 filterInner.checked = true;
-                this.mode = 'inner';
-                if (this.savedRectangle) {
-                    this.rect = { ...this.savedRectangle };
-                    this.savedRectangle = null;
+                this._mode = 'inner';
+                if (this._savedRectangle) {
+                    this._rect = { ...this._savedRectangle };
+                    this._savedRectangle = null;
                     this.updateAllRectangles();
                 }
             }
             
-            this.rectangleDragState = null;
+            this._rectangleDragState = null;
         }
         
         document.removeEventListener('mousemove', this.handleRectangleMove);
@@ -268,17 +313,17 @@ class Filter {
             
             const viewportRect = viewport.getBoundingClientRect();
             
-            const left = this.rect.x * viewportRect.width;
-            const top = this.rect.y * viewportRect.height;
-            const width = this.rect.width * viewportRect.width;
-            const height = this.rect.height * viewportRect.height;
+            const left = this._rect.x * viewportRect.width;
+            const top = this._rect.y * viewportRect.height;
+            const width = this._rect.width * viewportRect.width;
+            const height = this._rect.height * viewportRect.height;
             
             rectangle.style.left = `${left}px`;
             rectangle.style.top = `${top}px`;
             rectangle.style.width = `${width}px`;
             rectangle.style.height = `${height}px`;
             
-            overlay.className = `filter-overlay ${this.mode}-mode`;
+            overlay.className = `filter-overlay ${this._mode}-mode`;
         }
     }
 
@@ -288,15 +333,15 @@ class Filter {
             
             if (!overlay) continue;
             
-            overlay.className = `filter-overlay ${this.mode}-mode`;
+            overlay.className = `filter-overlay ${this._mode}-mode`;
         }
     }
 
     dispatchChangeEvent() {
         const event = new CustomEvent('filter-changed', {
             detail: {
-                mode: this.mode,
-                rect: { ...this.rect }
+                mode: this._mode,
+                rect: { ...this._rect }
             }
         });
         document.dispatchEvent(event);
@@ -304,11 +349,11 @@ class Filter {
 
     getParams() {
         return {
-            x: this.rect.x,
-            y: this.rect.y,
-            width: this.rect.width,
-            height: this.rect.height,
-            type: this.mode
+            x: this._rect.x,
+            y: this._rect.y,
+            width: this._rect.width,
+            height: this._rect.height,
+            type: this._mode
         };
     }
 }

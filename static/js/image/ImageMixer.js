@@ -12,6 +12,9 @@ class ImageMixer {
         this._selectedOutput = 1;
         this._pendingRequest = null;
         this._statusTimeout = null;
+        this._mixingDebounceTimer = null;
+        this._filterDebounceTimer = null;
+        this._isMixing = false;
         
         this.initialize();
     }
@@ -222,7 +225,7 @@ class ImageMixer {
                     const val = parseInt(e.target.value);
                     valueA.textContent = val;
                     this.getImage(imageKey).setWeight('a', val);
-                    this.performMixing();  
+                    this.debouncedPerformMixing(150);
                 });
             }
             
@@ -234,7 +237,7 @@ class ImageMixer {
                     const val = parseInt(e.target.value);
                     valueB.textContent = val;
                     this.getImage(imageKey).setWeight('b', val);
-                    this.performMixing();
+                    this.debouncedPerformMixing(150);
                 });
             }
         }
@@ -281,10 +284,12 @@ class ImageMixer {
     }
 
     setupGlobalListeners() {
-        // Filter changes
+        // Filter changes - debounced for drag/resize performance
         document.addEventListener('filter-changed', () => {
-            // this.filter()
-            this.performMixing();
+            clearTimeout(this._filterDebounceTimer);
+            this._filterDebounceTimer = setTimeout(() => {
+                this.performMixing();
+            }, 100);
         });
         
         // Output selection
@@ -308,6 +313,11 @@ class ImageMixer {
     }
 
     async performMixing() {
+        // Prevent duplicate mixing operations
+        if (this._isMixing) {
+            return;
+        }
+        
         if (this.pendingRequest) {
             this.pendingRequest.abort();
         }
@@ -319,6 +329,7 @@ class ImageMixer {
             return;
         }
         
+        this._isMixing = true;
         this.showStatus('Computing IFFT...', 'loading');
         
         const controller = new AbortController();
@@ -372,6 +383,7 @@ class ImageMixer {
             }
         } finally {
             this.pendingRequest = null;
+            this._isMixing = false;
         }
     }
 
@@ -416,6 +428,13 @@ class ImageMixer {
         if (this.filter) {
             this.filter.updateAllRectangles();
         }
+    }
+
+    debouncedPerformMixing(delay = 150) {
+        clearTimeout(this._mixingDebounceTimer);
+        this._mixingDebounceTimer = setTimeout(() => {
+            this.performMixing();
+        }, delay);
     }
 
     hasLoadedImages() {

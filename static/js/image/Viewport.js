@@ -3,19 +3,53 @@
  */
 class Viewport {
     constructor(viewportId) {
-        this.viewportId = viewportId;
-        this.element = document.getElementById(viewportId);
-        this.adjustments = { brightness: 1.0, contrast: 1.0 };
-        this.dragState = null;
-        this.adjustmentTimeout = null;
+        this._viewportId = viewportId;
+        this._element = document.getElementById(viewportId);
+        this._adjustments = { brightness: 1.0, contrast: 1.0 };
+        this._dragState = null;
+        this._adjustmentTimeout = null;
         
-        if (!this.element) {
+        if (!this._element) {
             throw new Error(`Viewport element not found: ${viewportId}`);
         }
     }
 
+    // Getters
+    get viewportId() {
+        return this._viewportId;
+    }
+
+    get element() {
+        return this._element;
+    }
+
+    get adjustments() {
+        return this._adjustments;
+    }
+
+    get dragState() {
+        return this._dragState;
+    }
+
+    get adjustmentTimeout() {
+        return this._adjustmentTimeout;
+    }
+
+    // Setters
+    set adjustments(value) {
+        this._adjustments = value;
+    }
+
+    set dragState(value) {
+        this._dragState = value;
+    }
+
+    set adjustmentTimeout(value) {
+        this._adjustmentTimeout = value;
+    }
+
     displayImage(imageSrc) {
-        this.element.innerHTML = '';
+        this._element.innerHTML = '';
         
         const img = document.createElement('img');
         img.src = imageSrc;
@@ -26,20 +60,20 @@ class Viewport {
             }
         };
         
-        this.element.appendChild(img);
+        this._element.appendChild(img);
         this.applyCSSAdjustments();
     }
 
     showPlaceholder(message = 'Click to upload') {
-        this.element.innerHTML = '';
+        this._element.innerHTML = '';
         const placeholder = document.createElement('span');
         placeholder.className = 'placeholder';
         placeholder.textContent = message;
-        this.element.appendChild(placeholder);
+        this._element.appendChild(placeholder);
     }
 
     clear() {
-        this.element.innerHTML = '';
+        this._element.innerHTML = '';
     }
 
     setAdjustments(adjustments) {
@@ -48,9 +82,9 @@ class Viewport {
     }
 
     applyCSSAdjustments() {
-        const img = this.element.querySelector('img');
+        const img = this._element.querySelector('img');
         if (img) {
-            img.style.filter = `brightness(${this.adjustments.brightness}) contrast(${this.adjustments.contrast})`;
+            img.style.filter = `brightness(${this._adjustments.brightness}) contrast(${this._adjustments.contrast})`;
         }
     }
 
@@ -59,29 +93,29 @@ class Viewport {
         
         e.preventDefault();
         
-        this.dragState = {
+        this._dragState = {
             startX: e.clientX,
             startY: e.clientY,
-            initialBrightness: this.adjustments.brightness,
-            initialContrast: this.adjustments.contrast
+            initialBrightness: this._adjustments.brightness,
+            initialContrast: this._adjustments.contrast
         };
         
-        this.element.classList.add('dragging');
-        this.showAdjustmentIndicator(this.adjustments.brightness, this.adjustments.contrast);
+        this._element.classList.add('dragging');
+        this.showAdjustmentIndicator(this._adjustments.brightness, this._adjustments.contrast);
         
         const dragHandler = (moveEvent) => {
-            if (!this.dragState) return;
+            if (!this._dragState) return;
             
-            const deltaX = moveEvent.clientX - this.dragState.startX;
-            const deltaY = moveEvent.clientY - this.dragState.startY;
+            const deltaX = moveEvent.clientX - this._dragState.startX;
+            const deltaY = moveEvent.clientY - this._dragState.startY;
             
-            const brightness = this.dragState.initialBrightness - (deltaY / 300);
+            const brightness = this._dragState.initialBrightness - (deltaY / 300);
             const clampedBrightness = Math.max(0.0, Math.min(2.0, brightness));
             
-            const contrast = this.dragState.initialContrast + (deltaX / 300);
+            const contrast = this._dragState.initialContrast + (deltaX / 300);
             const clampedContrast = Math.max(0.0, Math.min(3.0, contrast));
             
-            this.adjustments = {
+            this._adjustments = {
                 brightness: clampedBrightness,
                 contrast: clampedContrast
             };
@@ -95,14 +129,14 @@ class Viewport {
         };
         
         const dragEndHandler = () => {
-            this.element.classList.remove('dragging');
+            this._element.classList.remove('dragging');
             this.hideAdjustmentIndicator();
             
             if (onDragEnd) {
                 onDragEnd();
             }
             
-            this.dragState = null;
+            this._dragState = null;
             document.removeEventListener('mousemove', dragHandler);
             document.removeEventListener('mouseup', dragEndHandler);
         };
@@ -121,9 +155,9 @@ class Viewport {
         
         if (indicator) {
             indicator.classList.add('visible');
-            clearTimeout(this.adjustmentTimeout);
+            clearTimeout(this._adjustmentTimeout);
             
-            this.adjustmentTimeout = setTimeout(() => {
+            this._adjustmentTimeout = setTimeout(() => {
                 indicator.classList.remove('visible');
             }, 1000);
         }
@@ -133,27 +167,27 @@ class Viewport {
         const indicator = document.getElementById('adjustment-indicator');
         if (indicator) {
             indicator.classList.remove('visible');
-            clearTimeout(this.adjustmentTimeout);
+            clearTimeout(this._adjustmentTimeout);
         }
     }
 
     resize(width, height) {
-        this.element.style.width = `${width}px`;
-        this.element.style.height = `${height}px`;
+        this._element.style.width = `${width}px`;
+        this._element.style.height = `${height}px`;
     }
 
     getDimensions() {
         return {
-            width: this.element.offsetWidth,
-            height: this.element.offsetHeight
+            width: this._element.offsetWidth,
+            height: this._element.offsetHeight
         };
     }
 
     hasImage() {
-        return this.element.querySelector('img') !== null;
+        return this._element.querySelector('img') !== null;
     }
 
     getImage() {
-        return this.element.querySelector('img');
+        return this._element.querySelector('img');
     }
 }

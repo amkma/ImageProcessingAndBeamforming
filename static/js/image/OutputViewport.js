@@ -4,24 +4,46 @@
 class OutputViewport extends Viewport {
     constructor(viewportId, index) {
         super(viewportId);
-        this.index = index;
-        this.outputKey = `output${index}`;
-        this.isSelected = false;
-        this.container = document.getElementById(`output-container-${index}`);
+        this._index = index;
+        this._outputKey = `output${index}`;
+        this._isSelected = false;
+        this._container = document.getElementById(`output-container-${index}`);
         
         this.setupSelection();
         this.setupDragAdjustments();
     }
 
+    // Getters
+    get index() {
+        return this._index;
+    }
+
+    get outputKey() {
+        return this._outputKey;
+    }
+
+    get isSelected() {
+        return this._isSelected;
+    }
+
+    get container() {
+        return this._container;
+    }
+
+    // Setters
+    set isSelected(value) {
+        this._isSelected = value;
+    }
+
     setupSelection() {
         // Select on double-click
-        this.element.addEventListener('dblclick', () => {
+        this._element.addEventListener('dblclick', () => {
             this.select();
         });
     }
 
     setupDragAdjustments() {
-        this.element.addEventListener('mousedown', (e) => {
+        this._element.addEventListener('mousedown', (e) => {
             if (!this.hasImage()) return;
             
             this.startDrag(
@@ -44,20 +66,20 @@ class OutputViewport extends Viewport {
         });
         
         // Select this one
-        if (this.container) {
-            this.container.classList.add('selected');
+        if (this._container) {
+            this._container.classList.add('selected');
         }
-        this.isSelected = true;
+        this._isSelected = true;
         
         // Dispatch selection event
         const event = new CustomEvent('output-selected', {
-            detail: { outputIndex: this.index }
+            detail: { outputIndex: this._index }
         });
         document.dispatchEvent(event);
     }
 
     async applyOutputAdjustments() {
-        const img = this.element.querySelector('img');
+        const img = this._element.querySelector('img');
         if (!img) return;
         
         try {
@@ -65,9 +87,9 @@ class OutputViewport extends Viewport {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    output_key: this.outputKey,
-                    brightness: this.adjustments.brightness,
-                    contrast: this.adjustments.contrast
+                    output_key: this._outputKey,
+                    brightness: this._adjustments.brightness,
+                    contrast: this._adjustments.contrast
                 })
             });
             
@@ -77,7 +99,7 @@ class OutputViewport extends Viewport {
                 this.displayImage(data.adjusted_image);
             } else {
                 // Reset adjustments if output doesn't exist
-                this.adjustments = { brightness: 1.0, contrast: 1.0 };
+                this._adjustments = { brightness: 1.0, contrast: 1.0 };
                 this.applyCSSAdjustments();
             }
         } catch (error) {
@@ -87,7 +109,6 @@ class OutputViewport extends Viewport {
 
     displayOutput(imageSrc) {
         this.displayImage(imageSrc);
-        this.adjustments = { brightness: 1.0, contrast: 1.0 };
-        this.applyCSSAdjustments();
+        // Don't reset adjustments - preserve user's brightness/contrast changes
     }
 }

@@ -3,11 +3,11 @@
  */
 class UIController {
     constructor(arrayManager, visualization) {
-        // Core components
+        // Private properties with proper encapsulation
         this._arrayManager = arrayManager;
-        this._viz = visualization;
+        this._visualization = visualization;
 
-        // State variables
+        // State management
         this._selectedArrayIndex = 0;
         this._selectedAntenna = 0;
         this._activeScenario = null;
@@ -17,24 +17,98 @@ class UIController {
         this._updateTimer = null;
         this._isUpdating = false;
         this._rafId = null;
-        
-        // NEW: Track new array name separately
         this._newArrayName = '';
-        
-        // DOM caches
+
+        // DOM elements cache
         this._elements = {};
-        
+
+        this._initialize();
+    }
+
+    // ==================== PUBLIC GETTERS AND SETTERS ====================
+
+    get selectedArrayIndex() {
+        return this._selectedArrayIndex;
+    }
+
+    set selectedArrayIndex(value) {
+        const oldValue = this._selectedArrayIndex;
+        this._selectedArrayIndex = value;
+        this._arrayManager.activeArrayIndex = value;
+
+        if (oldValue !== value) {
+            console.log(`Array index changed from ${oldValue} to ${value}`);
+            this._onArraySelectionChanged();
+        }
+    }
+
+    get selectedAntenna() {
+        return this._selectedAntenna;
+    }
+
+    set selectedAntenna(value) {
+        const oldValue = this._selectedAntenna;
+        this._selectedAntenna = value;
+
+        if (oldValue !== value) {
+            console.log(`Selected antenna changed from ${oldValue} to ${value}`);
+            this._onAntennaSelectionChanged();
+        }
+    }
+
+    get activeScenarioName() {
+        return this._activeScenarioName;
+    }
+
+    set activeScenarioName(value) {
+        this._activeScenarioName = value;
+        this._updateModeIndicator();
+    }
+
+    get activeScenario() {
+        return this._activeScenario;
+    }
+
+    set activeScenario(value) {
+        this._activeScenario = value;
+    }
+
+    get arrayManager() {
+        return this._arrayManager;
+    }
+
+    get visualization() {
+        return this._visualization;
+    }
+
+    get gridSize() {
+        return this._gridSize;
+    }
+
+    set gridSize(value) {
+        this._gridSize = value;
+    }
+
+    get currentFreqRange() {
+        return this._currentFreqRange || { min: 100, max: 5e9, step: 1e6 };
+    }
+
+    set currentFreqRange(value) {
+        this._currentFreqRange = value;
+    }
+
+    // ==================== PRIVATE METHODS ====================
+
+    /**
+     * Initialize the controller
+     * @private
+     */
+    _initialize() {
         this._cacheElements();
         this._attachEventListeners();
         this._refreshUI();
-        
         console.log('UIController initialized');
     }
-
-    // Getters
-    get selectedArrayIndex() { return this._selectedArrayIndex; }
-    get selectedAntenna() { return this._selectedAntenna; }
-    get activeScenarioName() { return this._activeScenarioName; }
 
     /**
      * Cache DOM element references
@@ -47,7 +121,7 @@ class UIController {
         this._elements.removeArrayBtn = document.getElementById('removeArrayBtn');
         this._elements.duplicateArrayBtn = document.getElementById('duplicateArrayBtn');
         this._elements.arrayNameInput = document.getElementById('arrayNameInput');
-        this._elements.renameArrayBtn = document.getElementById('renameArrayBtn'); // Optional
+        this._elements.renameArrayBtn = document.getElementById('renameArrayBtn');
 
         // Sliders
         this._elements.numElementsSlider = document.getElementById('numElements');
@@ -93,7 +167,7 @@ class UIController {
 
         // Buttons
         this._elements.exportBtn = document.getElementById('exportBtn');
-        
+
         console.log('DOM elements cached:', Object.keys(this._elements).length);
     }
 
@@ -107,161 +181,62 @@ class UIController {
         this._attachAntennaControlListeners();
         this._attachVisualizationListeners();
         this._attachWindowListeners();
-        
+
         console.log('Event listeners attached');
     }
 
     /**
-     * Attach array management listeners - FIXED VERSION
+     * Attach array management listeners
      * @private
      */
     _attachArrayManagementListeners() {
         // Array selection
         if (this._elements.arraySelect) {
             this._elements.arraySelect.addEventListener('change', (e) => {
-                this._selectedArrayIndex = parseInt(e.target.value);
-                this._arrayManager.activeArrayIndex = this._selectedArrayIndex;
-                console.log(`Array selected: ${this._selectedArrayIndex} - ${this._getActiveArray()?.name}`);
-                this._refreshUI();
-                this._scheduleHeavyUpdate();
+                this.selectedArrayIndex = parseInt(e.target.value);
             });
         }
 
-        // Add array button - FIXED: Uses input value for new array name
+        // Add array button
         if (this._elements.addArrayBtn) {
             this._elements.addArrayBtn.addEventListener('click', () => {
-                // Get name from input or use default
-                const name = this._getArrayNameInput() || `Array ${this._arrayManager.numArrays + 1}`;
-                
-                console.log(`Adding new array: ${name}`);
-                
-                this._arrayManager.createArray({
-                    name: name,
-                    numAntennas: 8,
-                    spacing: 0.15,
-                    positionX: (this._arrayManager.numArrays) * 2 // Offset from existing arrays
-                });
-                
-                this._selectedArrayIndex = this._arrayManager.numArrays - 1;
-                
-                // Clear input after adding
-                this._clearArrayNameInput();
-                
-                this._updateArraySelect();
-                this._refreshUI();
-                this._scheduleHeavyUpdate();
+                this._addArray();
             });
         }
 
         // Remove array button
         if (this._elements.removeArrayBtn) {
             this._elements.removeArrayBtn.addEventListener('click', () => {
-                if (this._arrayManager.numArrays > 1) {
-                    const arrayName = this._getActiveArray()?.name || `Array ${this._selectedArrayIndex + 1}`;
-                    
-                    if (confirm(`Are you sure you want to remove "${arrayName}"?`)) {
-                        console.log(`Removing array at index ${this._selectedArrayIndex}: ${arrayName}`);
-                        this._arrayManager.removeArray(this._selectedArrayIndex);
-                        this._selectedArrayIndex = Math.min(this._selectedArrayIndex, this._arrayManager.numArrays - 1);
-                        this._updateArraySelect();
-                        this._refreshUI();
-                        this._scheduleHeavyUpdate();
-                    }
-                } else {
-                    alert("Cannot remove the last array. At least one array must exist.");
-                }
+                this._removeCurrentArray();
             });
         }
 
         // Duplicate array button
         if (this._elements.duplicateArrayBtn) {
             this._elements.duplicateArrayBtn.addEventListener('click', () => {
-                const sourceArray = this._getActiveArray();
-                if (sourceArray) {
-                    console.log(`Duplicating array: ${sourceArray.name}`);
-                    this._arrayManager.duplicateArray(this._selectedArrayIndex);
-                    this._selectedArrayIndex = this._arrayManager.numArrays - 1;
-                    this._updateArraySelect();
-                    this._refreshUI();
-                    this._scheduleHeavyUpdate();
-                }
+                this._duplicateCurrentArray();
             });
         }
 
-        // Array name input - FIXED: Multiple use cases
+        // Array name input
         if (this._elements.arrayNameInput) {
-            // Handle Enter key for quick operations
             this._elements.arrayNameInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    this._handleArrayNameEnter();
+                    this._renameCurrentArray();
                 }
             });
-            
-            // Handle input changes
+
             this._elements.arrayNameInput.addEventListener('input', (e) => {
                 this._newArrayName = e.target.value.trim();
             });
         }
-        
-        // Rename button (if exists)
+
+        // Rename button
         if (this._elements.renameArrayBtn) {
             this._elements.renameArrayBtn.addEventListener('click', () => {
                 this._renameCurrentArray();
             });
-        }
-    }
-    
-    /**
-     * Get array name from input field
-     * @private
-     */
-    _getArrayNameInput() {
-        if (!this._elements.arrayNameInput) return '';
-        return this._elements.arrayNameInput.value.trim();
-    }
-    
-    /**
-     * Clear array name input field
-     * @private
-     */
-    _clearArrayNameInput() {
-        if (this._elements.arrayNameInput) {
-            this._elements.arrayNameInput.value = '';
-            this._newArrayName = '';
-        }
-    }
-    
-    /**
-     * Handle Enter key in array name input
-     * @private
-     */
-    _handleArrayNameEnter() {
-        const name = this._getArrayNameInput();
-        if (!name) return;
-        
-        // If input has focus and Enter is pressed, rename current array
-        this._renameCurrentArray();
-    }
-    
-    /**
-     * Rename the current array
-     * @private
-     */
-    _renameCurrentArray() {
-        const array = this._getActiveArray();
-        const newName = this._getArrayNameInput();
-        
-        if (!array || !newName) return;
-        
-        if (newName !== array.name) {
-            console.log(`Renaming array from "${array.name}" to "${newName}"`);
-            array.name = newName;
-            this._updateArraySelect();
-            this._updateArrayInfo();
-            
-            // Clear input after rename
-            this._clearArrayNameInput();
         }
     }
 
@@ -278,143 +253,67 @@ class UIController {
 
         this._elements.numElementsSlider.addEventListener('change', (e) => {
             const val = parseInt(e.target.value);
-            const array = this._getActiveArray();
-            if (array) {
-                console.log(`Setting antenna count to: ${val}`);
-                array.setAntennaCount(val);
-                this._refreshUI();
-                this._scheduleHeavyUpdate();
-            }
+            this._setAntennaCount(val);
         });
 
         // Spacing mode
         this._elements.spacingModeAbsolute.addEventListener('change', () => {
             if (this._elements.spacingModeAbsolute.checked) {
-                const array = this._getActiveArray();
-                if (array) {
-                    array.spacingMode = 'absolute';
-                    console.log('Spacing mode set to: absolute');
-                    this._updateSpacingSliderForAbsolute(array);
-                    this._updateSpacingDisplay(array);
-                    this._scheduleSmoothUpdate();
-                }
+                this._setSpacingMode('absolute');
             }
         });
 
         this._elements.spacingModeLambda.addEventListener('change', () => {
             if (this._elements.spacingModeLambda.checked) {
-                const array = this._getActiveArray();
-                if (array) {
-                    array.spacingMode = 'lambda';
-                    console.log('Spacing mode set to: lambda');
-                    this._updateSpacingSliderForLambda(array);
-                    this._updateSpacingDisplay(array);
-                    this._scheduleSmoothUpdate();
-                }
+                this._setSpacingMode('lambda');
             }
         });
 
         // Distance/spacing
         this._elements.distanceSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
-            const array = this._getActiveArray();
-            
-            if (array) {
-                if (array.spacingMode === 'lambda') {
-                    array.lambdaMultiplier = val;
-                    console.log(`Lambda multiplier set to: ${val}`);
-                } else {
-                    array.spacing = val;
-                    console.log(`Spacing set to: ${val} m`);
-                }
-
-                this._updateSpacingDisplay(array);
-                this._updatePositionSliders();
-                this._scheduleSmoothUpdate();
-            }
+            this._updateSpacingValue(val);
         });
 
         // Curvature
         this._elements.curvatureSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
-            const array = this._getActiveArray();
-            if (array) {
-                array.curvature = val;
-                this._elements.curvatureValue.textContent = val.toFixed(1);
-                console.log(`Curvature set to: ${val}`);
-                this._updatePositionSliders();
-                this._scheduleSmoothUpdate();
-            }
+            this._setCurvature(val);
         });
 
         // Array delay
         this._elements.delaySlider.addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
-            const array = this._getActiveArray();
-            if (array) {
-                array.delay = val;
-                this._elements.delayValue.textContent = val + '°';
-                console.log(`Array delay set to: ${val}°`);
-                this._scheduleSmoothUpdate();
-            }
+            this._setArrayDelay(val);
         });
 
         // Combined delay (global)
         if (this._elements.combinedDelaySlider) {
             this._elements.combinedDelaySlider.addEventListener('input', (e) => {
                 const val = parseInt(e.target.value);
-                this._arrayManager.combinedDelay = val;
-                this._elements.combinedDelayValue.textContent = val + '°';
-                console.log(`Combined delay set to: ${val}°`);
-                this._scheduleSmoothUpdate();
+                this._setCombinedDelay(val);
             });
         }
 
         // Array position and rotation
         this._elements.positionXSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
-            const array = this._getActiveArray();
-            if (array) {
-                array.positionX = val;
-                this._elements.positionXValue.textContent = val.toFixed(2);
-                console.log(`Array X position set to: ${val} m`);
-                this._scheduleSmoothUpdate();
-            }
+            this._setArrayPositionX(val);
         });
 
         this._elements.positionYSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
-            const array = this._getActiveArray();
-            if (array) {
-                array.positionY = val;
-                this._elements.positionYValue.textContent = val.toFixed(2);
-                console.log(`Array Y position set to: ${val} m`);
-                this._scheduleSmoothUpdate();
-            }
+            this._setArrayPositionY(val);
         });
 
         this._elements.rotationSlider.addEventListener('input', (e) => {
             const val = parseInt(e.target.value);
-            const array = this._getActiveArray();
-            if (array) {
-                array.rotation = val;
-                this._elements.rotationValue.textContent = val + '°';
-                console.log(`Array rotation set to: ${val}°`);
-                this._scheduleSmoothUpdate();
-            }
+            this._setArrayRotation(val);
         });
 
         // Geometry
         this._elements.geometrySelect.addEventListener('change', (e) => {
-            const array = this._getActiveArray();
-            if (array) {
-                array.geometry = e.target.value;
-                console.log(`Geometry set to: ${e.target.value}`);
-                this._elements.curvatureGroup.style.display =
-                    (e.target.value === 'Curved') ? 'block' : 'none';
-                this._refreshUI();
-                this._scheduleHeavyUpdate();
-            }
+            this._setGeometry(e.target.value);
         });
     }
 
@@ -425,35 +324,19 @@ class UIController {
     _attachAntennaControlListeners() {
         // Antenna selection
         this._elements.antennaSelect.addEventListener('change', (e) => {
-            this._selectedAntenna = parseInt(e.target.value);
-            console.log(`Antenna selected: ${this._selectedAntenna}`);
-            this._updatePositionSliders();
+            this.selectedAntenna = parseInt(e.target.value);
         });
 
         // X position
         this._elements.antXSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
-            const array = this._getActiveArray();
-            if (array) {
-                array.setAntennaPosition(this._selectedAntenna, val,
-                    array.getAntenna(this._selectedAntenna).y);
-                this._elements.antXValue.textContent = val.toFixed(2);
-                console.log(`Antenna ${this._selectedAntenna} X position set to: ${val} m`);
-                this._scheduleSmoothUpdate();
-            }
+            this._setAntennaXPosition(val);
         });
 
         // Y position
         this._elements.antYSlider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
-            const array = this._getActiveArray();
-            if (array) {
-                array.setAntennaPosition(this._selectedAntenna,
-                    array.getAntenna(this._selectedAntenna).x, val);
-                this._elements.antYValue.textContent = val.toFixed(2);
-                console.log(`Antenna ${this._selectedAntenna} Y position set to: ${val} m`);
-                this._scheduleSmoothUpdate();
-            }
+            this._setAntennaYPosition(val);
         });
     }
 
@@ -464,7 +347,7 @@ class UIController {
     _attachVisualizationListeners() {
         // Colormap
         this._elements.colormapSelect.addEventListener('change', (e) => {
-            this._viz.colormap = e.target.value;
+            this.visualization.colormap = e.target.value;
             console.log(`Colormap changed to: ${e.target.value}`);
             this._fullUpdate();
         });
@@ -483,151 +366,360 @@ class UIController {
         window.addEventListener('resize', () => {
             clearTimeout(this._updateTimer);
             this._updateTimer = setTimeout(() => {
-                this._viz.resize();
+                this.visualization.resize();
             }, 150);
         });
     }
 
+    // ==================== ARRAY MANAGEMENT METHODS ====================
+
     /**
-     * Get active array
+     * Get the active array
      * @private
+     * @returns {PhasedArray|null}
      */
     _getActiveArray() {
-        return this._arrayManager.activeArray;
+        return this.arrayManager.activeArray;
     }
 
     /**
-     * Update array selection dropdown
+     * Get array name from input field
+     * @private
+     * @returns {string}
+     */
+    _getArrayNameInput() {
+        if (!this._elements.arrayNameInput) return '';
+        return this._elements.arrayNameInput.value.trim();
+    }
+
+    /**
+     * Clear array name input field
      * @private
      */
-    _updateArraySelect() {
-        if (!this._elements.arraySelect) {
-            console.error('arraySelect element not found!');
-            return;
+    _clearArrayNameInput() {
+        if (this._elements.arrayNameInput) {
+            this._elements.arrayNameInput.value = '';
+            this._newArrayName = '';
         }
-        
-        console.log('Updating array select. Total arrays:', this._arrayManager.numArrays);
-        
-        // Clear existing options
-        this._elements.arraySelect.innerHTML = '';
-        
-        // Add options for each array
-        this._arrayManager.arrays.forEach((array, index) => {
-            const opt = document.createElement('option');
-            opt.value = index;
-            opt.textContent = array.name || `Array ${index + 1}`;
-            opt.selected = (index === this._selectedArrayIndex);
-            this._elements.arraySelect.appendChild(opt);
+    }
+
+    /**
+     * Add a new array
+     * @private
+     */
+    _addArray() {
+        const name = this._getArrayNameInput() || `Array ${this.arrayManager.numArrays + 1}`;
+        console.log(`Adding new array: ${name}`);
+
+        this.arrayManager.createArray({
+            name: name,
+            numAntennas: 8,
+            spacing: 0.15,
+            positionX: (this.arrayManager.numArrays) * 2
         });
-        
-        // If no arrays, add a default option
-        if (this._arrayManager.numArrays === 0) {
-            const opt = document.createElement('option');
-            opt.value = 0;
-            opt.textContent = 'No arrays';
-            opt.disabled = true;
-            this._elements.arraySelect.appendChild(opt);
-        }
-        
-        console.log(`Array select updated with ${this._arrayManager.numArrays} options, selected: ${this._selectedArrayIndex}`);
+
+        this.selectedArrayIndex = this.arrayManager.numArrays - 1;
+
+        // Clear input after adding
+        this._clearArrayNameInput();
+
+        this._updateArraySelect();
+        this._refreshUI();
+        this._scheduleHeavyUpdate();
     }
 
     /**
-     * Update array information display
+     * Remove the current array
      * @private
      */
-    _updateArrayInfo() {
-        if (!this._elements.arrayInfo) return;
-        
+    _removeCurrentArray() {
+        if (this.arrayManager.numArrays > 1) {
+            const arrayName = this._getActiveArray()?.name || `Array ${this.selectedArrayIndex + 1}`;
+
+            if (confirm(`Are you sure you want to remove "${arrayName}"?`)) {
+                console.log(`Removing array at index ${this.selectedArrayIndex}: ${arrayName}`);
+                this.arrayManager.removeArray(this.selectedArrayIndex);
+                this.selectedArrayIndex = Math.min(this.selectedArrayIndex, this.arrayManager.numArrays - 1);
+                this._updateArraySelect();
+                this._refreshUI();
+                this._scheduleHeavyUpdate();
+            }
+        } else {
+            alert("Cannot remove the last array. At least one array must exist.");
+        }
+    }
+
+    /**
+     * Duplicate the current array
+     * @private
+     */
+    _duplicateCurrentArray() {
+        const sourceArray = this._getActiveArray();
+        if (sourceArray) {
+            console.log(`Duplicating array: ${sourceArray.name}`);
+            this.arrayManager.duplicateArray(this.selectedArrayIndex);
+            this.selectedArrayIndex = this.arrayManager.numArrays - 1;
+            this._updateArraySelect();
+            this._refreshUI();
+            this._scheduleHeavyUpdate();
+        }
+    }
+
+    /**
+     * Rename the current array
+     * @private
+     */
+    _renameCurrentArray() {
+        const array = this._getActiveArray();
+        const newName = this._getArrayNameInput();
+
+        if (!array || !newName) return;
+
+        if (newName !== array.name) {
+            console.log(`Renaming array from "${array.name}" to "${newName}"`);
+            array.name = newName;
+            this._updateArraySelect();
+            this._updateArrayInfo();
+
+            // Clear input after rename
+            this._clearArrayNameInput();
+        }
+    }
+
+    /**
+     * Handle array selection change
+     * @private
+     */
+    _onArraySelectionChanged() {
+        console.log(`Array selected: ${this.selectedArrayIndex} - ${this._getActiveArray()?.name}`);
+        this._refreshUI();
+        this._scheduleHeavyUpdate();
+    }
+
+    /**
+     * Handle antenna selection change
+     * @private
+     */
+    _onAntennaSelectionChanged() {
+        console.log(`Antenna selected: ${this.selectedAntenna}`);
+        this._updatePositionSliders();
+    }
+
+    // ==================== ARRAY PROPERTY SETTERS ====================
+
+    /**
+     * Set antenna count for active array
+     * @private
+     * @param {number} count
+     */
+    _setAntennaCount(count) {
         const array = this._getActiveArray();
         if (array) {
-            const info = `
-                <small class="text-secondary">
-                    Antennas: ${array.numAntennas} | 
-                    Position: (${array.positionX.toFixed(2)}, ${array.positionY.toFixed(2)}) m | 
-                    Rotation: ${array.rotation}°
-                </small>
-            `;
-            this._elements.arrayInfo.innerHTML = info;
+            console.log(`Setting antenna count to: ${count}`);
+            array.setAntennaCount(count);
+            this._refreshUI();
+            this._scheduleHeavyUpdate();
         }
     }
 
     /**
-     * Update spacing slider for absolute mode
+     * Set spacing mode for active array
      * @private
+     * @param {string} mode - 'absolute' or 'lambda'
      */
-    _updateSpacingSliderForAbsolute(array) {
-        this._elements.distanceSlider.min = 0;
-        this._elements.distanceSlider.max = 5.0;
-        this._elements.distanceSlider.step = 0.1;
-        this._elements.distanceSlider.value = array.spacing;
-    }
-
-    /**
-     * Update spacing slider for lambda mode
-     * @private
-     */
-    _updateSpacingSliderForLambda(array) {
-        this._elements.distanceSlider.min = 0;
-        this._elements.distanceSlider.max = 2.0;
-        this._elements.distanceSlider.step = 0.01;
-        this._elements.distanceSlider.value = array.lambdaMultiplier;
-    }
-
-    /**
-     * Update spacing display text
-     * @private
-     */
-    _updateSpacingDisplay(array) {
-        if (array.spacingMode === 'lambda') {
-            const lambda = array.averageWavelength;
-            const effectiveSpacing = array.effectiveSpacing;
-            this._elements.distanceValue.textContent = `${array.lambdaMultiplier.toFixed(2)}λ`;
-            this._elements.spacingInfo.innerHTML = `<small class="text-secondary" style="font-size: 0.65rem;">
-                λ = ${(lambda * 1000).toFixed(2)} mm | Actual: ${(effectiveSpacing * 1000).toFixed(2)} mm
-            </small>`;
-        } else {
-            this._elements.distanceValue.textContent = array.spacing.toFixed(2);
-            this._elements.spacingInfo.innerHTML = `<small class="text-secondary" style="font-size: 0.65rem;">
-                Range: 0.1m - 5.0m (10cm to 5 meters)
-            </small>`;
-        }
-    }
-
-    /**
-     * Update position sliders for selected antenna
-     * @private
-     */
-    _updatePositionSliders() {
+    _setSpacingMode(mode) {
         const array = this._getActiveArray();
-        if (!array) return;
+        if (array) {
+            array.spacingMode = mode;
+            console.log(`Spacing mode set to: ${mode}`);
 
-        const ant = array.getAntenna(this._selectedAntenna);
-        if (!ant) return;
+            if (mode === 'absolute') {
+                this._updateSpacingSliderForAbsolute(array);
+            } else {
+                this._updateSpacingSliderForLambda(array);
+            }
 
-        this._elements.antXSlider.value = ant.x;
-        this._elements.antYSlider.value = ant.y;
-        this._elements.antXValue.textContent = ant.x.toFixed(2);
-        this._elements.antYValue.textContent = ant.y.toFixed(2);
+            this._updateSpacingDisplay(array);
+            this._scheduleSmoothUpdate();
+        }
     }
 
     /**
-     * Refresh entire UI (after major changes)
+     * Update spacing value
+     * @private
+     * @param {number} value
+     */
+    _updateSpacingValue(value) {
+        const array = this._getActiveArray();
+        if (array) {
+            if (array.spacingMode === 'lambda') {
+                array.lambdaMultiplier = value;
+                console.log(`Lambda multiplier set to: ${value}`);
+            } else {
+                array.spacing = value;
+                console.log(`Spacing set to: ${value} m`);
+            }
+
+            this._updateSpacingDisplay(array);
+            this._updatePositionSliders();
+            this._scheduleSmoothUpdate();
+        }
+    }
+
+    /**
+     * Set curvature for active array
+     * @private
+     * @param {number} value
+     */
+    _setCurvature(value) {
+        const array = this._getActiveArray();
+        if (array) {
+            array.curvature = value;
+            this._elements.curvatureValue.textContent = value.toFixed(1);
+            console.log(`Curvature set to: ${value}`);
+            this._updatePositionSliders();
+            this._scheduleSmoothUpdate();
+        }
+    }
+
+    /**
+     * Set array delay for active array
+     * @private
+     * @param {number} value
+     */
+    _setArrayDelay(value) {
+        const array = this._getActiveArray();
+        if (array) {
+            array.delay = value;
+            this._elements.delayValue.textContent = value + '°';
+            console.log(`Array delay set to: ${value}°`);
+            this._scheduleSmoothUpdate();
+        }
+    }
+
+    /**
+     * Set combined delay for all arrays
+     * @private
+     * @param {number} value
+     */
+    _setCombinedDelay(value) {
+        this.arrayManager.combinedDelay = value;
+        this._elements.combinedDelayValue.textContent = value + '°';
+        console.log(`Combined delay set to: ${value}°`);
+        this._scheduleSmoothUpdate();
+    }
+
+    /**
+     * Set array X position
+     * @private
+     * @param {number} value
+     */
+    _setArrayPositionX(value) {
+        const array = this._getActiveArray();
+        if (array) {
+            array.positionX = value;
+            this._elements.positionXValue.textContent = value.toFixed(2);
+            console.log(`Array X position set to: ${value} m`);
+            this._scheduleSmoothUpdate();
+        }
+    }
+
+    /**
+     * Set array Y position
+     * @private
+     * @param {number} value
+     */
+    _setArrayPositionY(value) {
+        const array = this._getActiveArray();
+        if (array) {
+            array.positionY = value;
+            this._elements.positionYValue.textContent = value.toFixed(2);
+            console.log(`Array Y position set to: ${value} m`);
+            this._scheduleSmoothUpdate();
+        }
+    }
+
+    /**
+     * Set array rotation
+     * @private
+     * @param {number} value
+     */
+    _setArrayRotation(value) {
+        const array = this._getActiveArray();
+        if (array) {
+            array.rotation = value;
+            this._elements.rotationValue.textContent = value + '°';
+            console.log(`Array rotation set to: ${value}°`);
+            this._scheduleSmoothUpdate();
+        }
+    }
+
+    /**
+     * Set geometry for active array
+     * @private
+     * @param {string} value
+     */
+    _setGeometry(value) {
+        const array = this._getActiveArray();
+        if (array) {
+            array.geometry = value;
+            console.log(`Geometry set to: ${value}`);
+
+            this._elements.curvatureGroup.style.display =
+                (value === 'Curved') ? 'block' : 'none';
+
+            this._refreshUI();
+            this._scheduleHeavyUpdate();
+        }
+    }
+
+    /**
+     * Set antenna X position
+     * @private
+     * @param {number} value
+     */
+    _setAntennaXPosition(value) {
+        const array = this._getActiveArray();
+        if (array) {
+            const currentY = array.getAntenna(this.selectedAntenna).y;
+            array.setAntennaPosition(this.selectedAntenna, value, currentY);
+            this._elements.antXValue.textContent = value.toFixed(2);
+            console.log(`Antenna ${this.selectedAntenna} X position set to: ${value} m`);
+            this._scheduleSmoothUpdate();
+        }
+    }
+
+    /**
+     * Set antenna Y position
+     * @private
+     * @param {number} value
+     */
+    _setAntennaYPosition(value) {
+        const array = this._getActiveArray();
+        if (array) {
+            const currentX = array.getAntenna(this.selectedAntenna).x;
+            array.setAntennaPosition(this.selectedAntenna, currentX, value);
+            this._elements.antYValue.textContent = value.toFixed(2);
+            console.log(`Antenna ${this.selectedAntenna} Y position set to: ${value} m`);
+            this._scheduleSmoothUpdate();
+        }
+    }
+
+    // ==================== UI UPDATE METHODS ====================
+
+    /**
+     * Refresh entire UI
      * @private
      */
     _refreshUI() {
-        // Always update array select first
         this._updateArraySelect();
-        
+
         const array = this._getActiveArray();
         if (!array) {
             console.warn('No active array found for UI refresh');
-            
-            // FIXED: Don't create array here, just show warning
-            // The array should be created by BeamformingSimulator
-            if (this._arrayManager.numArrays === 0) {
-                console.error('CRITICAL: No arrays exist! This should not happen.');
-                // Show error in UI
+
+            if (this.arrayManager.numArrays === 0) {
+                console.error('CRITICAL: No arrays exist!');
                 if (this._elements.arrayInfo) {
                     this._elements.arrayInfo.innerHTML = `
                         <small class="text-danger">
@@ -636,15 +728,15 @@ class UIController {
                     `;
                 }
             }
-            return; // Don't create array or do recursive call
+            return;
         }
 
         console.log('Refreshing UI for array:', array.name);
 
-        // Update array controls with ACTUAL values from array object
+        // Update array controls
         this._elements.numElementsSlider.value = array.numAntennas;
         this._elements.numElementsValue.textContent = array.numAntennas;
-        
+
         // Update spacing mode
         if (array.spacingMode === 'lambda') {
             this._elements.spacingModeLambda.checked = true;
@@ -655,24 +747,24 @@ class UIController {
             this._elements.spacingModeLambda.checked = false;
             this._updateSpacingSliderForAbsolute(array);
         }
-        
-        // Update spacing value based on mode
+
+        // Update spacing value
         if (array.spacingMode === 'lambda') {
             this._elements.distanceSlider.value = array.lambdaMultiplier;
         } else {
             this._elements.distanceSlider.value = array.spacing;
         }
         this._updateSpacingDisplay(array);
-        
+
         // Update geometry and curvature
         this._elements.geometrySelect.value = array.geometry;
         this._elements.curvatureSlider.value = array.curvature;
         this._elements.curvatureValue.textContent = array.curvature.toFixed(1);
-        
+
         // Update delay
         this._elements.delaySlider.value = array.delay;
         this._elements.delayValue.textContent = array.delay + '°';
-        
+
         // Update position and rotation
         this._elements.positionXSlider.value = array.positionX;
         this._elements.positionXValue.textContent = array.positionX.toFixed(2);
@@ -680,23 +772,21 @@ class UIController {
         this._elements.positionYValue.textContent = array.positionY.toFixed(2);
         this._elements.rotationSlider.value = array.rotation;
         this._elements.rotationValue.textContent = array.rotation + '°';
-        
+
         // Update combined delay
         if (this._elements.combinedDelaySlider) {
-            this._elements.combinedDelaySlider.value = this._arrayManager.combinedDelay;
-            this._elements.combinedDelayValue.textContent = this._arrayManager.combinedDelay + '°';
+            this._elements.combinedDelaySlider.value = this.arrayManager.combinedDelay;
+            this._elements.combinedDelayValue.textContent = this.arrayManager.combinedDelay + '°';
         }
-        
+
         // Show/hide curvature based on geometry
         this._elements.curvatureGroup.style.display =
             (array.geometry === 'Curved') ? 'block' : 'none';
 
-        // Update name input - Show placeholder with current name
+        // Update name input
         if (this._elements.arrayNameInput) {
-            // Set placeholder to show current array name
             this._elements.arrayNameInput.placeholder = `"${array.name}" - Type to rename`;
-            
-            // Only clear input if user hasn't started typing a new name
+
             if (!this._newArrayName) {
                 this._elements.arrayNameInput.value = '';
             }
@@ -708,8 +798,64 @@ class UIController {
         this._updatePositionSliderRanges();
         this._updatePositionSliders();
         this._updateArrayInfo();
-        
+
         console.log('UI refresh complete');
+    }
+
+    /**
+     * Update array selection dropdown
+     * @private
+     */
+    _updateArraySelect() {
+        if (!this._elements.arraySelect) {
+            console.error('arraySelect element not found!');
+            return;
+        }
+
+        console.log('Updating array select. Total arrays:', this.arrayManager.numArrays);
+
+        // Clear existing options
+        this._elements.arraySelect.innerHTML = '';
+
+        // Add options for each array
+        this.arrayManager.arrays.forEach((array, index) => {
+            const opt = document.createElement('option');
+            opt.value = index;
+            opt.textContent = array.name || `Array ${index + 1}`;
+            opt.selected = (index === this.selectedArrayIndex);
+            this._elements.arraySelect.appendChild(opt);
+        });
+
+        // If no arrays, add a default option
+        if (this.arrayManager.numArrays === 0) {
+            const opt = document.createElement('option');
+            opt.value = 0;
+            opt.textContent = 'No arrays';
+            opt.disabled = true;
+            this._elements.arraySelect.appendChild(opt);
+        }
+
+        console.log(`Array select updated with ${this.arrayManager.numArrays} options, selected: ${this.selectedArrayIndex}`);
+    }
+
+    /**
+     * Update array information display
+     * @private
+     */
+    _updateArrayInfo() {
+        if (!this._elements.arrayInfo) return;
+
+        const array = this._getActiveArray();
+        if (array) {
+            const info = `
+                <small class="text-secondary">
+                    Antennas: ${array.numAntennas} | 
+                    Position: (${array.positionX.toFixed(2)}, ${array.positionY.toFixed(2)}) m | 
+                    Rotation: ${array.rotation}°
+                </small>
+            `;
+            this._elements.arrayInfo.innerHTML = info;
+        }
     }
 
     /**
@@ -728,11 +874,11 @@ class UIController {
             this._elements.antennaSelect.appendChild(opt);
         }
 
-        if (this._selectedAntenna >= array.numAntennas) {
-            this._selectedAntenna = 0;
+        if (this.selectedAntenna >= array.numAntennas) {
+            this.selectedAntenna = 0;
         }
-        this._elements.antennaSelect.value = this._selectedAntenna;
-        
+        this._elements.antennaSelect.value = this.selectedAntenna;
+
         console.log(`Antenna select updated. Total antennas: ${array.numAntennas}`);
     }
 
@@ -773,9 +919,9 @@ class UIController {
                 </div>
                 <input type="range" class="form-range freq-slider" 
                        data-index="${i}" 
-                       min="${this._getFreqRange().min}" 
-                       max="${this._getFreqRange().max}" 
-                       step="${this._getFreqRange().step}" 
+                       min="${this.currentFreqRange.min}" 
+                       max="${this.currentFreqRange.max}" 
+                       step="${this.currentFreqRange.step}" 
                        value="${freq}">
             `;
             this._elements.freqContainer.appendChild(div);
@@ -784,54 +930,112 @@ class UIController {
         // Attach frequency slider listeners
         document.querySelectorAll('.freq-slider').forEach(slider => {
             slider.addEventListener('input', (e) => {
-                const idx = parseInt(e.target.dataset.index);
-                const val = parseFloat(e.target.value);
-                const array = this._getActiveArray();
-                if (array) {
-                    array.setAntennaFrequency(idx, val);
-
-                    // Update display
-                    const freqSpan = document.getElementById(`freqVal${idx}`);
-                    let freqDisplay, freqUnit;
-                    if (val >= 1e9) {
-                        freqDisplay = (val / 1e9).toFixed(3);
-                        freqUnit = 'GHz';
-                    } else if (val >= 1e6) {
-                        freqDisplay = (val / 1e6).toFixed(2);
-                        freqUnit = 'MHz';
-                    } else if (val >= 1e3) {
-                        freqDisplay = (val / 1e3).toFixed(1);
-                        freqUnit = 'kHz';
-                    } else {
-                        freqDisplay = val.toFixed(0);
-                        freqUnit = 'Hz';
-                    }
-                    freqSpan.innerText = freqDisplay;
-                    freqSpan.parentElement.innerHTML = `<span id="freqVal${idx}">${freqDisplay}</span> ${freqUnit}`;
-
-                    // Update spacing display in lambda mode
-                    if (array.spacingMode === 'lambda') {
-                        this._updateSpacingDisplay(array);
-                    }
-
-                    console.log(`Antenna ${idx} frequency set to: ${val} Hz`);
-                    this._scheduleSmoothUpdate();
-                }
+                this._onFrequencySliderChanged(e);
             });
         });
-        
+
         console.log(`Frequency controls updated for ${array.numAntennas} antennas`);
     }
 
     /**
-     * Get frequency range for sliders
+     * Handle frequency slider change
      * @private
+     * @param {Event} e
      */
-    _getFreqRange() {
-        if (this._currentFreqRange) {
-            return this._currentFreqRange;
+    _onFrequencySliderChanged(e) {
+        const idx = parseInt(e.target.dataset.index);
+        const val = parseFloat(e.target.value);
+        const array = this._getActiveArray();
+
+        if (array) {
+            array.setAntennaFrequency(idx, val);
+
+            // Update display
+            this._updateFrequencyDisplay(idx, val);
+
+            // Update spacing display in lambda mode
+            if (array.spacingMode === 'lambda') {
+                this._updateSpacingDisplay(array);
+            }
+
+            console.log(`Antenna ${idx} frequency set to: ${val} Hz`);
+            this._scheduleSmoothUpdate();
         }
-        return { min: 100, max: 5e9, step: 1e6 };
+    }
+
+    /**
+     * Update frequency display
+     * @private
+     * @param {number} index
+     * @param {number} value
+     */
+    _updateFrequencyDisplay(index, value) {
+        let freqDisplay, freqUnit;
+
+        if (value >= 1e9) {
+            freqDisplay = (value / 1e9).toFixed(3);
+            freqUnit = 'GHz';
+        } else if (value >= 1e6) {
+            freqDisplay = (value / 1e6).toFixed(2);
+            freqUnit = 'MHz';
+        } else if (value >= 1e3) {
+            freqDisplay = (value / 1e3).toFixed(1);
+            freqUnit = 'kHz';
+        } else {
+            freqDisplay = value.toFixed(0);
+            freqUnit = 'Hz';
+        }
+
+        const freqSpan = document.getElementById(`freqVal${index}`);
+        if (freqSpan) {
+            freqSpan.innerText = freqDisplay;
+            freqSpan.parentElement.innerHTML = `<span id="freqVal${index}">${freqDisplay}</span> ${freqUnit}`;
+        }
+    }
+
+    /**
+     * Update spacing slider for absolute mode
+     * @private
+     * @param {PhasedArray} array
+     */
+    _updateSpacingSliderForAbsolute(array) {
+        this._elements.distanceSlider.min = 0;
+        this._elements.distanceSlider.max = 5.0;
+        this._elements.distanceSlider.step = 0.1;
+        this._elements.distanceSlider.value = array.spacing;
+    }
+
+    /**
+     * Update spacing slider for lambda mode
+     * @private
+     * @param {PhasedArray} array
+     */
+    _updateSpacingSliderForLambda(array) {
+        this._elements.distanceSlider.min = 0;
+        this._elements.distanceSlider.max = 2.0;
+        this._elements.distanceSlider.step = 0.01;
+        this._elements.distanceSlider.value = array.lambdaMultiplier;
+    }
+
+    /**
+     * Update spacing display text
+     * @private
+     * @param {PhasedArray} array
+     */
+    _updateSpacingDisplay(array) {
+        if (array.spacingMode === 'lambda') {
+            const lambda = array.averageWavelength;
+            const effectiveSpacing = array.effectiveSpacing;
+            this._elements.distanceValue.textContent = `${array.lambdaMultiplier.toFixed(2)}λ`;
+            this._elements.spacingInfo.innerHTML = `<small class="text-secondary" style="font-size: 0.65rem;">
+                λ = ${(lambda * 1000).toFixed(2)} mm | Actual: ${(effectiveSpacing * 1000).toFixed(2)} mm
+            </small>`;
+        } else {
+            this._elements.distanceValue.textContent = array.spacing.toFixed(2);
+            this._elements.spacingInfo.innerHTML = `<small class="text-secondary" style="font-size: 0.65rem;">
+                Range: 0.1m - 5.0m (10cm to 5 meters)
+            </small>`;
+        }
     }
 
     /**
@@ -839,11 +1043,30 @@ class UIController {
      * @private
      */
     _updatePositionSliderRanges() {
-        this._elements.antXSlider.min = -this._viz.extents.x;
-        this._elements.antXSlider.max = this._viz.extents.x;
+        this._elements.antXSlider.min = -this.visualization.extents.x;
+        this._elements.antXSlider.max = this.visualization.extents.x;
         this._elements.antYSlider.min = 0;
-        this._elements.antYSlider.max = this._viz.extents.y;
+        this._elements.antYSlider.max = this.visualization.extents.y;
     }
+
+    /**
+     * Update position sliders for selected antenna
+     * @private
+     */
+    _updatePositionSliders() {
+        const array = this._getActiveArray();
+        if (!array) return;
+
+        const ant = array.getAntenna(this.selectedAntenna);
+        if (!ant) return;
+
+        this._elements.antXSlider.value = ant.x;
+        this._elements.antYSlider.value = ant.y;
+        this._elements.antXValue.textContent = ant.x.toFixed(2);
+        this._elements.antYValue.textContent = ant.y.toFixed(2);
+    }
+
+    // ==================== UPDATE SCHEDULING ====================
 
     /**
      * Schedule smooth update (short delay)
@@ -881,15 +1104,15 @@ class UIController {
 
         this._rafId = requestAnimationFrame(() => {
             console.log('Performing full visualization update...');
-            
-            try {
-                const heatmapData = this._arrayManager.computeCombinedHeatmap(
-                    this._gridSize, this._viz.extents.x, this._viz.extents.y);
-                const beamData = this._arrayManager.computeCombinedBeamPattern();
-                const positions = this._arrayManager.getAllAntennaPositions();
 
-                this._viz.updateAll(heatmapData, positions, beamData);
-                
+            try {
+                const heatmapData = this.arrayManager.computeCombinedHeatmap(
+                    this.gridSize, this.visualization.extents.x, this.visualization.extents.y);
+                const beamData = this.arrayManager.computeCombinedBeamPattern();
+                const positions = this.arrayManager.getAllAntennaPositions();
+
+                this.visualization.updateAll(heatmapData, positions, beamData);
+
                 console.log('Visualization update complete');
             } catch (error) {
                 console.error('Error during visualization update:', error);
@@ -900,28 +1123,181 @@ class UIController {
         });
     }
 
+    // ==================== SCENARIO MANAGEMENT ====================
+
     /**
      * Update mode indicator
      * @private
      */
     _updateModeIndicator() {
         if (this._elements.currentMode) {
-            this._elements.currentMode.textContent = this._activeScenarioName;
-            console.log(`Mode indicator updated to: ${this._activeScenarioName}`);
+            this._elements.currentMode.textContent = this.activeScenarioName;
+            console.log(`Mode indicator updated to: ${this.activeScenarioName}`);
         }
 
         document.querySelectorAll('.scenario-btn').forEach(btn => {
             btn.classList.remove('active');
         });
 
-        if (this._activeScenario !== null) {
-            const activeBtn = document.querySelector(`.scenario-btn[data-scenario="${this._activeScenario}"]`);
+        if (this.activeScenario !== null) {
+            const activeBtn = document.querySelector(`.scenario-btn[data-scenario="${this.activeScenario}"]`);
             if (activeBtn) {
                 activeBtn.classList.add('active');
-                console.log(`Scenario button activated: ${this._activeScenario}`);
+                console.log(`Scenario button activated: ${this.activeScenario}`);
             }
         }
     }
+
+    /**
+     * Load scenario configuration
+     * @public
+     * @param {string} scenarioName - Name of scenario
+     * @param {object} scenarioConfig - Scenario configuration
+     */
+    loadScenario(scenarioName, scenarioConfig) {
+        console.log('Loading scenario:', scenarioName, scenarioConfig);
+
+        clearTimeout(this._updateTimer);
+        if (this._rafId) {
+            cancelAnimationFrame(this._rafId);
+            this._rafId = null;
+        }
+
+        this.activeScenario = scenarioName;
+        this.activeScenarioName = scenarioConfig.name ||
+            scenarioName.charAt(0).toUpperCase() + scenarioName.slice(1);
+
+        // Update all UI controls with scenario values
+        this._updateAllUIControlsFromScenario(scenarioConfig);
+
+        this._updateModeIndicator();
+        this._refreshUI();
+
+        setTimeout(() => {
+            this._fullUpdate();
+        }, 50);
+
+        console.log(`Scenario "${scenarioName}" loaded successfully`);
+    }
+
+    /**
+     * Update ALL UI controls from scenario configuration
+     * @private
+     * @param {object} scenarioConfig
+     */
+    _updateAllUIControlsFromScenario(scenarioConfig) {
+        console.log('Updating UI controls from scenario config:', scenarioConfig);
+
+        // Store frequency range from scenario
+        this.currentFreqRange = scenarioConfig.freqRange || null;
+
+        // Clear existing arrays
+        this.arrayManager._arrays = [];
+
+        // Set global properties
+        if (scenarioConfig.propagation_speed !== undefined) {
+            this.arrayManager.propagationSpeed = scenarioConfig.propagation_speed;
+        }
+        if (scenarioConfig.combined_delay !== undefined) {
+            this.arrayManager.combinedDelay = scenarioConfig.combined_delay;
+        }
+
+        // Create arrays based on scenario
+        if (scenarioConfig.arrays && Array.isArray(scenarioConfig.arrays)) {
+            console.log(`Creating ${scenarioConfig.arrays.length} arrays from scenario`);
+            scenarioConfig.arrays.forEach((arrayConfig, index) => {
+                this._createArrayFromConfig(arrayConfig, index);
+            });
+
+            // Set active array index
+            this.selectedArrayIndex = 0;
+            this.arrayManager._activeArrayIndex = 0;
+
+            console.log(`Arrays created: ${this.arrayManager._arrays.length}`);
+        } else {
+            // Legacy single-array support
+            this._createLegacyArrayFromConfig(scenarioConfig);
+        }
+
+        // Update combined delay slider
+        if (this._elements.combinedDelaySlider) {
+            this._elements.combinedDelaySlider.value = this.arrayManager.combinedDelay;
+            this._elements.combinedDelayValue.textContent = this.arrayManager.combinedDelay + '°';
+        }
+
+        // Clear any pending array name input
+        this._clearArrayNameInput();
+
+        console.log('Scenario arrays loaded:', this.arrayManager._arrays);
+    }
+
+    /**
+     * Create array from configuration
+     * @private
+     * @param {object} arrayConfig
+     * @param {number} index
+     */
+    _createArrayFromConfig(arrayConfig, index) {
+        console.log(`Creating array ${index + 1}:`, arrayConfig);
+
+        const newArray = new PhasedArray(
+            arrayConfig.num_antennas || 8,
+            arrayConfig.distance_m || 0.15,
+            this.arrayManager.propagationSpeed
+        );
+
+        // Apply configuration
+        newArray.name = arrayConfig.name || `Array ${index + 1}`;
+        newArray.delay = arrayConfig.delay_deg || 0;
+        newArray.geometry = arrayConfig.array_geometry || 'Linear';
+        newArray.curvature = arrayConfig.curvature || 0;
+        newArray.spacingMode = arrayConfig.spacing_mode || 'absolute';
+        newArray.lambdaMultiplier = arrayConfig.lambda_multiplier || 0.5;
+        newArray.positionX = arrayConfig.positionX || 0;
+        newArray.positionY = arrayConfig.positionY || 0;
+        newArray.rotation = arrayConfig.rotation || 0;
+
+        // Load frequencies if specified
+        if (arrayConfig.frequencies) {
+            newArray.loadFrequencies(arrayConfig.frequencies);
+        }
+
+        // Add to array manager
+        this.arrayManager._arrays.push(newArray);
+    }
+
+    /**
+     * Create legacy single array from configuration
+     * @private
+     * @param {object} scenarioConfig
+     */
+    _createLegacyArrayFromConfig(scenarioConfig) {
+        console.log('Creating single array from legacy config');
+        const newArray = new PhasedArray(
+            scenarioConfig.num_antennas || 8,
+            scenarioConfig.distance_m || 0.15,
+            this.arrayManager.propagationSpeed
+        );
+
+        newArray.name = scenarioConfig.name || 'Main Array';
+        newArray.delay = scenarioConfig.delay_deg || 0;
+        newArray.geometry = scenarioConfig.array_geometry || 'Linear';
+        newArray.curvature = scenarioConfig.curvature || 0;
+        newArray.spacingMode = scenarioConfig.spacing_mode || 'absolute';
+        newArray.positionX = scenarioConfig.positionX || 0;
+        newArray.positionY = scenarioConfig.positionY || 0;
+        newArray.rotation = scenarioConfig.rotation || 0;
+
+        if (scenarioConfig.frequencies) {
+            newArray.loadFrequencies(scenarioConfig.frequencies);
+        }
+
+        this.arrayManager._arrays = [newArray];
+        this.selectedArrayIndex = 0;
+        this.arrayManager._activeArrayIndex = 0;
+    }
+
+    // ==================== EXPORT FUNCTIONALITY ====================
 
     /**
      * Handle export button click
@@ -930,9 +1306,9 @@ class UIController {
     _handleExport() {
         try {
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-            const filename = `beamforming_${this._activeScenarioName.replace(/\s+/g, '_')}_${timestamp}`;
+            const filename = `beamforming_${this.activeScenarioName.replace(/\s+/g, '_')}_${timestamp}`;
 
-            this._viz.exportBoth(filename);
+            this.visualization.exportBoth(filename);
             alert(`Snapshots saved: ${filename}`);
             console.log(`Export completed: ${filename}`);
         } catch (e) {
@@ -942,136 +1318,8 @@ class UIController {
     }
 
     /**
-     * Update ALL UI controls from scenario configuration
-     * @private
-     */
-    _updateAllUIControlsFromScenario(scenarioConfig) {
-        console.log('Updating UI controls from scenario config:', scenarioConfig);
-        
-        // Store frequency range from scenario
-        this._currentFreqRange = scenarioConfig.freqRange || null;
-        
-        // Clear existing arrays
-        this._arrayManager._arrays = [];
-        
-        // Set global properties
-        if (scenarioConfig.propagation_speed !== undefined) {
-            this._arrayManager.propagationSpeed = scenarioConfig.propagation_speed;
-        }
-        if (scenarioConfig.combined_delay !== undefined) {
-            this._arrayManager.combinedDelay = scenarioConfig.combined_delay;
-        }
-        
-        // Create arrays based on scenario
-        if (scenarioConfig.arrays && Array.isArray(scenarioConfig.arrays)) {
-            console.log(`Creating ${scenarioConfig.arrays.length} arrays from scenario`);
-            scenarioConfig.arrays.forEach((arrayConfig, index) => {
-                console.log(`Creating array ${index + 1}:`, arrayConfig);
-                
-                // Create array with configuration
-                const newArray = new PhasedArray(
-                    arrayConfig.num_antennas || 8,
-                    arrayConfig.distance_m || 0.15,
-                    this._arrayManager.propagationSpeed
-                );
-                
-                // Apply configuration
-                newArray.name = arrayConfig.name || `Array ${index + 1}`;
-                newArray.delay = arrayConfig.delay_deg || 0;
-                newArray.geometry = arrayConfig.array_geometry || 'Linear';
-                newArray.curvature = arrayConfig.curvature || 0;
-                newArray.spacingMode = arrayConfig.spacing_mode || 'absolute';
-                newArray.lambdaMultiplier = arrayConfig.lambda_multiplier || 0.5;
-                newArray.positionX = arrayConfig.positionX || 0;
-                newArray.positionY = arrayConfig.positionY || 0;
-                newArray.rotation = arrayConfig.rotation || 0;
-                
-                // Load frequencies if specified
-                if (arrayConfig.frequencies) {
-                    newArray.loadFrequencies(arrayConfig.frequencies);
-                }
-                
-                // Add to array manager
-                this._arrayManager._arrays.push(newArray);
-            });
-            
-            // Set active array index
-            this._selectedArrayIndex = 0;
-            this._arrayManager._activeArrayIndex = 0;
-            
-            console.log(`Arrays created: ${this._arrayManager._arrays.length}`);
-        } else {
-            // Legacy single-array support
-            console.log('Creating single array from legacy config');
-            const newArray = new PhasedArray(
-                scenarioConfig.num_antennas || 8,
-                scenarioConfig.distance_m || 0.15,
-                this._arrayManager.propagationSpeed
-            );
-            
-            newArray.name = scenarioConfig.name || 'Main Array';
-            newArray.delay = scenarioConfig.delay_deg || 0;
-            newArray.geometry = scenarioConfig.array_geometry || 'Linear';
-            newArray.curvature = scenarioConfig.curvature || 0;
-            newArray.spacingMode = scenarioConfig.spacing_mode || 'absolute';
-            newArray.positionX = scenarioConfig.positionX || 0;
-            newArray.positionY = scenarioConfig.positionY || 0;
-            newArray.rotation = scenarioConfig.rotation || 0;
-            
-            if (scenarioConfig.frequencies) {
-                newArray.loadFrequencies(scenarioConfig.frequencies);
-            }
-            
-            this._arrayManager._arrays = [newArray];
-            this._selectedArrayIndex = 0;
-            this._arrayManager._activeArrayIndex = 0;
-        }
-        
-        // Update combined delay slider
-        if (this._elements.combinedDelaySlider) {
-            this._elements.combinedDelaySlider.value = this._arrayManager.combinedDelay;
-            this._elements.combinedDelayValue.textContent = this._arrayManager.combinedDelay + '°';
-        }
-        
-        // Clear any pending array name input
-        this._clearArrayNameInput();
-        
-        console.log('Scenario arrays loaded:', this._arrayManager._arrays);
-    }
-
-    /**
-     * Load scenario (public method)
-     * @param {string} scenarioName - Name of scenario
-     * @param {object} scenarioConfig - Scenario configuration
-     */
-    loadScenario(scenarioName, scenarioConfig) {
-        console.log('Loading scenario:', scenarioName, scenarioConfig);
-        
-        clearTimeout(this._updateTimer);
-        if (this._rafId) {
-            cancelAnimationFrame(this._rafId);
-            this._rafId = null;
-        }
-
-        this._activeScenario = scenarioName;
-        this._activeScenarioName = scenarioConfig.name || 
-            scenarioName.charAt(0).toUpperCase() + scenarioName.slice(1);
-
-        // Update ALL UI controls with scenario values
-        this._updateAllUIControlsFromScenario(scenarioConfig);
-
-        this._updateModeIndicator();
-        this._refreshUI(); // This will now update arraySelect
-
-        setTimeout(() => {
-            this._fullUpdate();
-        }, 50);
-        
-        console.log(`Scenario "${scenarioName}" loaded successfully`);
-    }
-
-    /**
      * Initialize visualization (call after construction)
+     * @public
      */
     initialize() {
         console.log('Initializing UIController...');

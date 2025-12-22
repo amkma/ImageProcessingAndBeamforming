@@ -13,7 +13,7 @@ class ArrayManager {
     // Getters
     get arrays() { return this._arrays; }
     get activeArray() { 
-        return this._arrays[this._activeArrayIndex] || null; 
+        return this._arrays[this.activeArrayIndex] || null;
     }
     get activeArrayIndex() { return this._activeArrayIndex; }
     get numArrays() { return this._arrays.length; }
@@ -21,8 +21,8 @@ class ArrayManager {
     get combinedDelay() { return this._combinedDelay; }
 
     // Setters
-    set activeArrayIndex(index) { 
-        if (index >= 0 && index < this._arrays.length) {
+    set activeArrayIndex(index) {
+        if (index >= 0 && index < this.numArrays) {
             this._activeArrayIndex = index;
         }
     }
@@ -36,9 +36,9 @@ class ArrayManager {
      */
     createArray(config = {}) {
         console.log('Creating array with config:', config);
-        
+
         const defaultConfig = {
-            name: `Array ${this._arrays.length + 1}`,
+            name: `Array ${this.numArrays + 1}`,
             numAntennas: 8,
             spacing: 0.15,
             delay: 0,
@@ -55,10 +55,10 @@ class ArrayManager {
         const newArray = new PhasedArray(
             mergedConfig.numAntennas,
             mergedConfig.spacing,
-            this._propagationSpeed
+            this.propagationSpeed
         );
 
-        // Apply configuration
+        // Apply configuration using setters
         newArray.name = mergedConfig.name;
         newArray.delay = mergedConfig.delay;
         newArray.geometry = mergedConfig.geometry;
@@ -68,15 +68,15 @@ class ArrayManager {
         newArray.positionX = mergedConfig.positionX;
         newArray.positionY = mergedConfig.positionY;
         newArray.rotation = mergedConfig.rotation;
-        
+
         // Set default frequency
         const defaultFreq = 2400000000;
         newArray.setAllFrequencies(defaultFreq);
-        
+
         this._arrays.push(newArray);
-        this._activeArrayIndex = this._arrays.length - 1;
-        
-        console.log(`Array created: ${newArray.name}. Total arrays: ${this._arrays.length}`);
+        this.activeArrayIndex = this.numArrays - 1;
+
+        console.log(`Array created: ${newArray.name}. Total arrays: ${this.numArrays}`);
         return newArray;
     }
 
@@ -87,15 +87,15 @@ class ArrayManager {
      */
     createArrayFromConfig(config) {
         console.log('Creating array from config:', config);
-        
+
         const newArray = new PhasedArray(
             config.num_antennas || 8,
             config.distance_m || 0.15,
-            this._propagationSpeed
+            this.propagationSpeed
         );
-        
-        // Apply configuration
-        newArray.name = config.name || `Array ${this._arrays.length + 1}`;
+
+        // Apply configuration using setters
+        newArray.name = config.name || `Array ${this.numArrays + 1}`;
         newArray.delay = config.delay_deg || 0;
         newArray.geometry = config.array_geometry || 'Linear';
         newArray.curvature = config.curvature || 0;
@@ -104,16 +104,16 @@ class ArrayManager {
         newArray.positionX = config.positionX || 0;
         newArray.positionY = config.positionY || 0;
         newArray.rotation = config.rotation || 0;
-        
+
         // Load frequencies if specified
         if (config.frequencies) {
             newArray.loadFrequencies(config.frequencies);
         }
-        
+
         this._arrays.push(newArray);
-        this._activeArrayIndex = this._arrays.length - 1;
-        
-        console.log(`Array created from config: ${newArray.name}. Total arrays: ${this._arrays.length}`);
+        this.activeArrayIndex = this.numArrays - 1;
+
+        console.log(`Array created from config: ${newArray.name}. Total arrays: ${this.numArrays}`);
         return newArray;
     }
 
@@ -122,13 +122,13 @@ class ArrayManager {
      * @param {number} index - Index of array to remove
      */
     removeArray(index) {
-        if (index >= 0 && index < this._arrays.length) {
+        if (index >= 0 && index < this.numArrays) {
             console.log(`Removing array at index ${index}: ${this._arrays[index].name}`);
             this._arrays.splice(index, 1);
-            if (this._activeArrayIndex >= this._arrays.length) {
-                this._activeArrayIndex = Math.max(0, this._arrays.length - 1);
+            if (this.activeArrayIndex >= this.numArrays) {
+                this.activeArrayIndex = Math.max(0, this.numArrays - 1);
             }
-            console.log(`Array removed. Total arrays: ${this._arrays.length}`);
+            console.log(`Array removed. Total arrays: ${this.numArrays}`);
         }
     }
 
@@ -146,7 +146,7 @@ class ArrayManager {
      * @returns {PhasedArray[]} All arrays
      */
     getAllArrays() {
-        return this._arrays;
+        return this.arrays;
     }
 
     /**
@@ -155,15 +155,15 @@ class ArrayManager {
      * @returns {PhasedArray} The duplicated array
      */
     duplicateArray(index) {
-        if (index >= 0 && index < this._arrays.length) {
+        if (index >= 0 && index < this.numArrays) {
             const sourceArray = this._arrays[index];
             console.log(`Duplicating array: ${sourceArray.name}`);
             const clonedArray = sourceArray.clone();
             clonedArray.name = `${sourceArray.name} Copy`;
             clonedArray.positionX += 1; // Offset slightly
             this._arrays.push(clonedArray);
-            this._activeArrayIndex = this._arrays.length - 1;
-            console.log(`Array duplicated. Total arrays: ${this._arrays.length}`);
+            this.activeArrayIndex = this.numArrays - 1;
+            console.log(`Array duplicated. Total arrays: ${this.numArrays}`);
             return clonedArray;
         }
         return null;
@@ -177,7 +177,7 @@ class ArrayManager {
      * @returns {object} {z: [][], x: [], y: []}
      */
     computeCombinedHeatmap(gridSize = 200, extentX = 10, extentY = 20) {
-        if (this._arrays.length === 0) {
+        if (this.numArrays === 0) {
             // Return empty heatmap if no arrays
             const xs = Array(gridSize).fill().map((_, i) => -extentX + (i / (gridSize - 1)) * (2 * extentX));
             const ys = Array(gridSize).fill().map((_, i) => 0 + (i / (gridSize - 1)) * extentY);
@@ -197,9 +197,9 @@ class ArrayManager {
         const combinedField = Array(gridSize).fill().map(() => Array(gridSize).fill(0));
 
         // Sum contributions from all arrays
-        this._arrays.forEach((array, arrayIndex) => {
+        this.arrays.forEach((array, arrayIndex) => {
             const maxFreq = array.maxFrequency;
-            const arrayDelayRad = array.delayRadians + (this._combinedDelay * Math.PI / 180);
+            const arrayDelayRad = array.delayRadians + (this.combinedDelay * Math.PI / 180);
 
             for (let r = 0; r < gridSize; r++) {
                 const yPos = ys[r];
@@ -213,9 +213,10 @@ class ArrayManager {
 
                     // Sum contributions from all antennas in this array
                     for (let i = 0; i < array.numAntennas; i++) {
+                        const antenna = array.getAntenna(i);
                         const phaseDelay = -i * arrayDelayRad;
-                        waveSum += array._antennas[i].calculateWaveContribution(
-                            transformedX, transformedY, phaseDelay, this._propagationSpeed, maxFreq
+                        waveSum += antenna.calculateWaveContribution(
+                            transformedX, transformedY, phaseDelay, this.propagationSpeed, maxFreq
                         );
                     }
 
@@ -236,12 +237,12 @@ class ArrayManager {
         // Translate to array position
         let tx = x - array.positionX;
         let ty = y - array.positionY;
-        
+
         // Apply rotation (negative for coordinate transformation)
         const rad = -array.rotation * Math.PI / 180;
         const cos = Math.cos(rad);
         const sin = Math.sin(rad);
-        
+
         if (getX) {
             return tx * cos - ty * sin;
         } else {
@@ -293,16 +294,16 @@ class ArrayManager {
             let combinedImag = 0;
 
             // Sum contributions from all arrays
-            this._arrays.forEach(array => {
+            this.arrays.forEach(array => {
                 const maxFreq = array.maxFrequency;
-                const arrayDelayRad = array.delayRadians + (this._combinedDelay * Math.PI / 180);
+                const arrayDelayRad = array.delayRadians + (this.combinedDelay * Math.PI / 180);
 
                 // Calculate array factor contribution
                 const arrayFactor = this._calculateArrayFactor(array, azimuthRad, arrayDelayRad, maxFreq);
-                
+
                 // Apply array position phase shift
                 const posPhase = this._calculatePositionPhase(array, azimuthRad);
-                
+
                 combinedReal += arrayFactor.real * Math.cos(posPhase) - arrayFactor.imag * Math.sin(posPhase);
                 combinedImag += arrayFactor.real * Math.sin(posPhase) + arrayFactor.imag * Math.cos(posPhase);
             });
@@ -327,9 +328,10 @@ class ArrayManager {
         let imagSum = 0;
 
         for (let i = 0; i < array.numAntennas; i++) {
+            const antenna = array.getAntenna(i);
             const phaseDelay = -i * arrayDelayRad;
-            const contribution = array._antennas[i].calculateBeamContribution(
-                azimuthRad, phaseDelay, this._propagationSpeed, maxFreq
+            const contribution = antenna.calculateBeamContribution(
+                azimuthRad, phaseDelay, this.propagationSpeed, maxFreq
             );
             realSum += contribution.real;
             imagSum += contribution.imag;
@@ -343,8 +345,8 @@ class ArrayManager {
      * @private
      */
     _calculatePositionPhase(array, azimuthRad) {
-        const avgFreq = array._antennas.reduce((sum, a) => sum + a.frequency, 0) / array.numAntennas;
-        const k = 2 * Math.PI / (this._propagationSpeed / avgFreq);
+        const avgFreq = array.antennas.reduce((sum, a) => sum + a.frequency, 0) / array.numAntennas;
+        const k = 2 * Math.PI / (this.propagationSpeed / avgFreq);
         const dx = array.positionX * Math.cos(azimuthRad);
         const dy = array.positionY * Math.sin(azimuthRad);
         return k * (dx + dy);
@@ -356,22 +358,22 @@ class ArrayManager {
      */
     getAllAntennaPositions() {
         const positions = { x: [], y: [], colors: [] };
-        
-        this._arrays.forEach((array, arrayIndex) => {
+
+        this.arrays.forEach((array, arrayIndex) => {
             const arrayPositions = array.getPositions();
             const color = this._getArrayColor(arrayIndex);
-            
+
             // Transform each antenna position by array position and rotation
             arrayPositions.x.forEach((antX, antIndex) => {
                 const antY = arrayPositions.y[antIndex];
                 const transformed = this._transformAntennaPosition(antX, antY, array);
-                
+
                 positions.x.push(transformed.x);
                 positions.y.push(transformed.y);
                 positions.colors.push(color);
             });
         });
-        
+
         return positions;
     }
 
@@ -384,10 +386,10 @@ class ArrayManager {
         const rad = array.rotation * Math.PI / 180;
         const cos = Math.cos(rad);
         const sin = Math.sin(rad);
-        
+
         const rotatedX = antX * cos - antY * sin;
         const rotatedY = antX * sin + antY * cos;
-        
+
         // Apply array translation
         return {
             x: rotatedX + array.positionX,
@@ -419,18 +421,18 @@ class ArrayManager {
      */
     loadScenario(config) {
         console.log('ArrayManager loading scenario:', config);
-        
+
         // Clear existing arrays
         this._arrays = [];
-        
-        // Set global properties
+
+        // Set global properties using setters
         if (config.propagation_speed !== undefined) {
-            this._propagationSpeed = config.propagation_speed;
+            this.propagationSpeed = config.propagation_speed;
         }
         if (config.combined_delay !== undefined) {
-            this._combinedDelay = config.combined_delay;
+            this.combinedDelay = config.combined_delay;
         }
-        
+
         // Create arrays based on scenario
         if (config.arrays && Array.isArray(config.arrays)) {
             console.log(`Creating ${config.arrays.length} arrays from scenario`);
@@ -455,11 +457,11 @@ class ArrayManager {
                 frequencies: config.frequencies || null
             });
         }
-        
-        // Reset active array index
-        this._activeArrayIndex = this._arrays.length > 0 ? 0 : 0;
-        
-        console.log(`Scenario loaded. Total arrays: ${this._arrays.length}`);
+
+        // Reset active array index using setter
+        this.activeArrayIndex = this.numArrays > 0 ? 0 : 0;
+
+        console.log(`Scenario loaded. Total arrays: ${this.numArrays}`);
     }
 
     /**
@@ -468,9 +470,9 @@ class ArrayManager {
      */
     getConfiguration() {
         return {
-            arrays: this._arrays.map(array => array.getConfiguration()),
-            propagation_speed: this._propagationSpeed,
-            combined_delay: this._combinedDelay
+            arrays: this.arrays.map(array => array.getConfiguration()),
+            propagation_speed: this.propagationSpeed,
+            combined_delay: this.combinedDelay
         };
     }
 }
@@ -502,7 +504,7 @@ class PhasedArray {
     get spacing() { return this._spacing; }
     get propagationSpeed() { return this._propagationSpeed; }
     get delay() { return this._delay; }
-    get delayRadians() { return (this._delay * Math.PI) / 180; }
+    get delayRadians() { return (this.delay * Math.PI) / 180; }
     get geometry() { return this._geometry; }
     get curvature() { return this._curvature; }
     get spacingMode() { return this._spacingMode; }
@@ -512,21 +514,21 @@ class PhasedArray {
     get rotation() { return this._rotation; }
     get name() { return this._name; }
     get maxFrequency() {
-        return this._antennas.length > 0 ? 
-            Math.max(...this._antennas.map(a => a.frequency)) : 2400000000;
+        return this.numAntennas > 0 ?
+            Math.max(...this.antennas.map(a => a.frequency)) : 2400000000;
     }
     get averageFrequency() {
-        return this._antennas.length > 0 ?
-            this._antennas.reduce((sum, a) => sum + a.frequency, 0) / this.numAntennas : 2400000000;
+        return this.numAntennas > 0 ?
+            this.antennas.reduce((sum, a) => sum + a.frequency, 0) / this.numAntennas : 2400000000;
     }
     get averageWavelength() {
-        return this._propagationSpeed / this.averageFrequency;
+        return this.propagationSpeed / this.averageFrequency;
     }
     get effectiveSpacing() {
-        if (this._spacingMode === 'lambda') {
-            return this.averageWavelength * this._lambdaMultiplier;
+        if (this.spacingMode === 'lambda') {
+            return this.averageWavelength * this.lambdaMultiplier;
         }
-        return this._spacing;
+        return this.spacing;
     }
 
     // Setters
@@ -586,11 +588,11 @@ class PhasedArray {
             let x = -totalWidth / 2 + i * spacing;
             let y = 0;
 
-            if (this._geometry === 'Curved') {
-                y = 0.01 * 20 + this._curvature * 0.01 * (x * x);
+            if (this.geometry === 'Curved') {
+                y = 0.01 * 20 + this.curvature * 0.01 * (x * x);
             }
 
-            this._antennas[i].position = { x, y };
+            this.antennas[i].position = { x, y };
         }
     }
 
@@ -605,17 +607,17 @@ class PhasedArray {
 
         if (count > this.numAntennas) {
             // Add new antennas
-            const lastFreq = this._antennas.length > 0 ? this._antennas[0].frequency : 2400000000;
+            const lastFreq = this.numAntennas > 0 ? this.antennas[0].frequency : 2400000000;
             for (let i = this.numAntennas; i < count; i++) {
                 this._antennas.push(new Antenna(i, lastFreq));
             }
         } else {
             // Remove excess antennas
-            this._antennas = this._antennas.slice(0, count);
+            this._antennas = this.antennas.slice(0, count);
         }
 
         // Reindex
-        this._antennas.forEach((ant, idx) => ant._index = idx);
+        this.antennas.forEach((ant, idx) => ant.index = idx);
         this._recalculatePositions();
     }
 
@@ -625,7 +627,7 @@ class PhasedArray {
      * @returns {Antenna} Antenna instance
      */
     getAntenna(index) {
-        return this._antennas[index];
+        return this.antennas[index];
     }
 
     /**
@@ -635,7 +637,7 @@ class PhasedArray {
      */
     setAntennaFrequency(index, frequency) {
         if (index >= 0 && index < this.numAntennas) {
-            this._antennas[index].frequency = frequency;
+            this.antennas[index].frequency = frequency;
         }
     }
 
@@ -647,7 +649,7 @@ class PhasedArray {
      */
     setAntennaPosition(index, x, y) {
         if (index >= 0 && index < this.numAntennas) {
-            this._antennas[index].position = { x, y };
+            this.antennas[index].position = { x, y };
         }
     }
 
@@ -657,8 +659,8 @@ class PhasedArray {
      */
     getPositions() {
         return {
-            x: this._antennas.map(a => a.x),
-            y: this._antennas.map(a => a.y)
+            x: this.antennas.map(a => a.x),
+            y: this.antennas.map(a => a.y)
         };
     }
 
@@ -667,7 +669,7 @@ class PhasedArray {
      * @returns {number[]} Array of frequencies
      */
     getFrequencies() {
-        return this._antennas.map(a => a.frequency);
+        return this.antennas.map(a => a.frequency);
     }
 
     /**
@@ -675,7 +677,7 @@ class PhasedArray {
      * @param {number} frequency - Frequency in Hz
      */
     setAllFrequencies(frequency) {
-        this._antennas.forEach(ant => ant.frequency = frequency);
+        this.antennas.forEach(ant => ant.frequency = frequency);
     }
 
     /**
@@ -686,13 +688,13 @@ class PhasedArray {
         console.log(`Loading ${frequencies.length} frequencies:`, frequencies);
         frequencies.forEach((freq, idx) => {
             if (idx < this.numAntennas) {
-                this._antennas[idx].frequency = freq;
+                this.antennas[idx].frequency = freq;
             } else if (idx >= this.numAntennas) {
                 // If we have more frequencies than antennas, add new antennas
                 this._antennas.push(new Antenna(idx, freq));
             }
         });
-        
+
         // Recalculate positions after loading frequencies
         this._recalculatePositions();
     }
@@ -703,45 +705,46 @@ class PhasedArray {
      */
     loadConfiguration(config) {
         console.log('PhasedArray loading configuration:', config);
-        
+
+        // Use setters for all properties
         if (config.num_antennas !== undefined) {
             this.setAntennaCount(config.num_antennas);
         }
         if (config.distance_m !== undefined) {
-            this._spacing = config.distance_m;
+            this.spacing = config.distance_m;
         }
         if (config.delay_deg !== undefined) {
-            this._delay = config.delay_deg;
+            this.delay = config.delay_deg;
         }
         if (config.array_geometry !== undefined) {
-            this._geometry = config.array_geometry;
+            this.geometry = config.array_geometry;
         }
         if (config.curvature !== undefined) {
-            this._curvature = config.curvature;
+            this.curvature = config.curvature;
         }
         if (config.spacing_mode !== undefined) {
-            this._spacingMode = config.spacing_mode;
+            this.spacingMode = config.spacing_mode;
         }
         if (config.lambda_multiplier !== undefined) {
-            this._lambdaMultiplier = config.lambda_multiplier;
+            this.lambdaMultiplier = config.lambda_multiplier;
         }
         if (config.positionX !== undefined) {
-            this._positionX = config.positionX;
+            this.positionX = config.positionX;
         }
         if (config.positionY !== undefined) {
-            this._positionY = config.positionY;
+            this.positionY = config.positionY;
         }
         if (config.rotation !== undefined) {
-            this._rotation = config.rotation;
+            this.rotation = config.rotation;
         }
         if (config.name !== undefined) {
-            this._name = config.name;
+            this.name = config.name;
         }
-        
+
         if (config.frequencies) {
             this.loadFrequencies(config.frequencies);
         }
-        
+
         this._recalculatePositions();
     }
 
@@ -751,17 +754,17 @@ class PhasedArray {
      */
     getConfiguration() {
         return {
-            name: this._name,
+            name: this.name,
             num_antennas: this.numAntennas,
-            distance_m: this._spacing,
-            delay_deg: this._delay,
-            array_geometry: this._geometry,
-            curvature: this._curvature,
-            spacing_mode: this._spacingMode,
-            lambda_multiplier: this._lambdaMultiplier,
-            positionX: this._positionX,
-            positionY: this._positionY,
-            rotation: this._rotation,
+            distance_m: this.spacing,
+            delay_deg: this.delay,
+            array_geometry: this.geometry,
+            curvature: this.curvature,
+            spacing_mode: this.spacingMode,
+            lambda_multiplier: this.lambdaMultiplier,
+            positionX: this.positionX,
+            positionY: this.positionY,
+            rotation: this.rotation,
             frequencies: this.getFrequencies()
         };
     }
@@ -772,7 +775,7 @@ class PhasedArray {
      */
     clone() {
         console.log(`Cloning array: ${this.name}`);
-        const newArray = new PhasedArray(this.numAntennas, this._spacing, this._propagationSpeed);
+        const newArray = new PhasedArray(this.numAntennas, this.spacing, this.propagationSpeed);
         newArray.loadConfiguration(this.getConfiguration());
         return newArray;
     }

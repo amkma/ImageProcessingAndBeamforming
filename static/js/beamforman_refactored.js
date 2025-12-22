@@ -469,9 +469,9 @@ class BeamformingSimulator {
         if (confirm('Are you sure you want to reset to default configuration? All current settings will be lost.')) {
             console.log('Resetting to default configuration');
             
-            // Clear array manager
-            this._arrayManager._arrays = [];
-            this._arrayManager._activeArrayIndex = 0;
+            // Clear array manager using setter
+            this._arrayManager.arrays.length = 0;
+            this._arrayManager.activeArrayIndex = 0;
             
             // Create default array
             this._arrayManager.createArray({
